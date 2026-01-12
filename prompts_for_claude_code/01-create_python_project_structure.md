@@ -1,0 +1,1 @@
+Create a project structure for a Python project follwoing the Python best practices. The project structure should be very pythonic.
