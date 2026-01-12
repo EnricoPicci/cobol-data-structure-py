@@ -1,0 +1,2 @@
+Generate a claude.md file to instruct claude code to follow Python best practices and generate Pythonic code.
+In particular consider that the development of this package will run on Mac, Linux and Windows machines and therefore the code and the tests must be written considering that they have to run correctly on all platforms.
