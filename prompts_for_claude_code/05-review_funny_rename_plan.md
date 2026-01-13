@@ -1,0 +1,1 @@
+Use three deep dive agents to review the design and plan defined in file "/docs/FUNNY_NAMING_SCHEMES_PLAN.md". Ensure that there are no bugs or massive gaps in the solution proposed.
