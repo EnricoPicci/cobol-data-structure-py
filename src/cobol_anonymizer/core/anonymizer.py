@@ -45,6 +45,11 @@ from cobol_anonymizer.core.mapper import MappingTable, MappingEntry
 from cobol_anonymizer.cobol.copy_resolver import CopyResolver, CopyStatement
 from cobol_anonymizer.core.utils import is_filler, normalize_identifier
 from cobol_anonymizer.exceptions import ColumnOverflowError
+from cobol_anonymizer.generators.comment_generator import (
+    CommentTransformer,
+    CommentConfig,
+    CommentMode,
+)
 
 
 @dataclass
@@ -134,6 +139,7 @@ class LineTransformer:
         self,
         mapping_table: MappingTable,
         redefines_tracker: Optional[RedefinesTracker] = None,
+        comment_transformer: Optional[CommentTransformer] = None,
     ):
         """
         Initialize the transformer.
@@ -141,9 +147,11 @@ class LineTransformer:
         Args:
             mapping_table: The mapping table for identifier lookups
             redefines_tracker: Optional tracker for REDEFINES handling
+            comment_transformer: Optional transformer for comment anonymization
         """
         self.mapping_table = mapping_table
         self.redefines_tracker = redefines_tracker or RedefinesTracker()
+        self.comment_transformer = comment_transformer or CommentTransformer()
 
     def transform_line(
         self,
@@ -163,13 +171,16 @@ class LineTransformer:
         changes = []
         warnings = []
 
-        # Don't transform comment lines (but may want to anonymize content later)
+        # Transform comment lines using the comment transformer
         if cobol_line.is_comment:
+            transformed_line, comment_result = self.comment_transformer.transform_line(
+                cobol_line.raw
+            )
             return TransformResult(
                 original_line=cobol_line.raw,
-                transformed_line=cobol_line.raw,
+                transformed_line=transformed_line,
                 line_number=cobol_line.line_number,
-                changes_made=[],
+                changes_made=comment_result.changes_made,
                 is_comment=True,
             )
 

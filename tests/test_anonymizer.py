@@ -83,15 +83,18 @@ class TestLineTransformer:
 
         assert "FILLER" in result.transformed_line
 
-    def test_comment_line_unchanged(self):
-        """Comment lines are not modified."""
+    def test_comment_line_anonymized(self):
+        """Comment lines have their content anonymized."""
         table = MappingTable()
         transformer = LineTransformer(table)
         parsed = parse_line("      *THIS IS A COMMENT", 1)
         result = transformer.transform_line(parsed)
 
         assert result.is_comment
-        assert result.original_line == result.transformed_line
+        # Comment structure preserved but content replaced
+        assert result.transformed_line.startswith("      *")
+        # Original text should not be present
+        assert "THIS IS A COMMENT" not in result.transformed_line
 
     def test_external_item_preserved(self):
         """EXTERNAL items keep original names."""

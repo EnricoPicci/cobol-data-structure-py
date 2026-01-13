@@ -568,3 +568,139 @@ class TestEdgeCases:
         )
 
         assert result.success
+
+
+class TestCommentAnonymization:
+    """Tests for comment anonymization in the full pipeline."""
+
+    def test_comments_are_anonymized(self, tmp_path):
+        """Comments are replaced with filler text in output."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        test_file = input_dir / "TESTCOMM.cob"
+        test_file.write_text("""      * SISTEMA PORTAFOGLIO RAMI DANNI
+      * AGGIORNAMENTO PARTE AMMINISTRATIVA
+       01 WS-FIELD PIC X.
+""")
+
+        output_dir = tmp_path / "output"
+
+        result = anonymize_directory(
+            input_dir,
+            output_dir,
+            overwrite=True,
+        )
+
+        assert result.success
+
+        # Check that original Italian text is not in output
+        for file_result in result.file_results:
+            for change in file_result.changes:
+                if change.is_comment:
+                    assert "SISTEMA" not in change.transformed_line
+                    assert "PORTAFOGLIO" not in change.transformed_line
+                    assert "AGGIORNAMENTO" not in change.transformed_line
+
+    def test_comment_dividers_preserved(self, tmp_path):
+        """Comment dividers (asterisks, dashes) are preserved."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        test_file = input_dir / "DIVIDERS.cob"
+        test_file.write_text("""      ******************************************
+      * ACTUAL COMMENT TEXT HERE
+      *------------------------------------------
+       01 WS-FIELD PIC X.
+""")
+
+        output_dir = tmp_path / "output"
+
+        result = anonymize_directory(
+            input_dir,
+            output_dir,
+            overwrite=True,
+        )
+
+        assert result.success
+
+        # Check dividers are preserved
+        for file_result in result.file_results:
+            divider_count = 0
+            for change in file_result.changes:
+                if change.is_comment:
+                    if "****" in change.transformed_line:
+                        divider_count += 1
+                    if "----" in change.transformed_line:
+                        divider_count += 1
+            assert divider_count >= 2, "Dividers should be preserved"
+
+    def test_comment_line_count_preserved(self, tmp_path):
+        """Number of comment lines is preserved."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        test_file = input_dir / "LINECOUNT.cob"
+        original_content = """      * COMMENT LINE 1
+      * COMMENT LINE 2
+      * COMMENT LINE 3
+       01 WS-FIELD PIC X.
+"""
+        test_file.write_text(original_content)
+
+        output_dir = tmp_path / "output"
+
+        result = anonymize_directory(
+            input_dir,
+            output_dir,
+            overwrite=True,
+        )
+
+        assert result.success
+
+        # Count original comment lines
+        original_comment_lines = sum(
+            1 for line in original_content.splitlines() if len(line) >= 7 and line[6] == '*'
+        )
+
+        # Count output comment lines
+        for file_result in result.file_results:
+            output_comment_lines = sum(1 for c in file_result.changes if c.is_comment)
+            assert output_comment_lines == original_comment_lines
+
+    def test_box_borders_preserved(self, tmp_path):
+        """Box borders (whitespace with asterisks) are preserved."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        test_file = input_dir / "BOXBORDER.cob"
+        test_file.write_text("""      ******************************************
+      *                                        *
+      *  SOME COMMENT TEXT HERE                *
+      *                                        *
+      ******************************************
+       01 WS-FIELD PIC X.
+""")
+
+        output_dir = tmp_path / "output"
+
+        result = anonymize_directory(
+            input_dir,
+            output_dir,
+            overwrite=True,
+        )
+
+        assert result.success
+
+        # Check that box structure is preserved
+        box_border_count = 0
+        for file_result in result.file_results:
+            for change in file_result.changes:
+                if change.is_comment:
+                    line = change.transformed_line
+                    # Check for lines that are mostly whitespace with asterisks at edges
+                    if line.strip().endswith('*') and '   *' in line:
+                        box_border_count += 1
+
+        # We should have box borders preserved
+        assert box_border_count >= 2

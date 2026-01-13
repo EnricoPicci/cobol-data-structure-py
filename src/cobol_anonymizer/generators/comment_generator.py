@@ -3,13 +3,13 @@ Comment Handler - Anonymizes COBOL comments while preserving structure.
 
 This module handles:
 - Detecting comment lines (column 7 = `*`)
-- Replacing Italian business terms with generic text
-- Removing personal names, dates, and system identifiers
-- Preserving comment structure and indentation
+- Generating meaningless filler text to replace comment content
+- Preserving comment structure, indentation, and dividers
 - Option to strip all comments
 """
 
 import re
+import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
@@ -17,20 +17,77 @@ from enum import Enum
 
 class CommentMode(Enum):
     """Comment anonymization modes."""
-    ANONYMIZE = "anonymize"  # Replace content with generic text
+    ANONYMIZE = "anonymize"  # Replace content with meaningless filler text
     STRIP = "strip"  # Remove comment content entirely
     PRESERVE = "preserve"  # Keep comments unchanged
+
+
+# Generic filler words for generating meaningless comment text
+# These are neutral COBOL-like terms with no business meaning
+FILLER_WORDS = [
+    "BLAH", "DATA", "PROCESS", "VALUE", "FIELD", "ITEM", "CODE",
+    "TEXT", "NOTE", "INFO", "WORK", "TEMP", "AREA", "LINE",
+    "STEP", "TASK", "UNIT", "PART", "ELEM", "SECT", "BLOCK",
+]
+
+
+def generate_filler_text(length: int, seed: Optional[int] = None) -> str:
+    """
+    Generate meaningless filler text of exactly the specified length.
+
+    Args:
+        length: Target length for the generated text
+        seed: Optional random seed for reproducibility
+
+    Returns:
+        Meaningless filler text of exact length
+    """
+    if length <= 0:
+        return ""
+
+    if seed is not None:
+        rng = random.Random(seed)
+    else:
+        rng = random.Random()
+
+    words = []
+    current_length = 0
+
+    # Sort filler words by length to find words that fit
+    sorted_fillers = sorted(FILLER_WORDS, key=len)
+
+    while current_length < length:
+        # Find words that can fit in remaining space
+        remaining = length - current_length
+        if current_length > 0:
+            remaining -= 1  # Account for space separator
+
+        # Filter words that fit
+        fitting_words = [w for w in FILLER_WORDS if len(w) <= remaining]
+        if not fitting_words:
+            break
+
+        word = rng.choice(fitting_words)
+        if current_length > 0:
+            current_length += 1  # space
+        words.append(word)
+        current_length += len(word)
+
+    result = " ".join(words)
+
+    # Pad with spaces if needed to match exact length
+    if len(result) < length:
+        result = result.ljust(length)
+
+    return result
 
 
 @dataclass
 class CommentConfig:
     """Configuration for comment handling."""
     mode: CommentMode = CommentMode.ANONYMIZE
-    remove_personal_names: bool = True
-    remove_system_ids: bool = True
-    translate_italian: bool = True
-    preserve_structural_markers: bool = True
     preserve_dividers: bool = True  # Keep lines like *------- or ******
+    seed: Optional[int] = None  # Random seed for reproducible output
 
 
 # Italian to English term mappings for business domain
@@ -203,6 +260,7 @@ def is_divider_line(comment_text: str) -> bool:
     - All asterisks: ***********
     - All equals: *===========
     - Mixed patterns: *-*-*-*-*-*
+    - Box borders with mostly whitespace: *                    *
 
     Args:
         comment_text: The comment text (after column 7)
@@ -214,8 +272,13 @@ def is_divider_line(comment_text: str) -> bool:
     if not text:
         return True  # Empty comment is a divider
 
-    # Check if it's mostly non-alphanumeric
+    # Check if text contains only non-alphanumeric characters (divider symbols)
     alphanumeric_count = sum(1 for c in text if c.isalnum())
+    if alphanumeric_count == 0:
+        # Only non-alphanumeric chars - this is a divider (e.g., "*", "---", "*-*-*")
+        return True
+
+    # Check if it's mostly non-alphanumeric (2 or fewer letters/digits in 3+ chars)
     if alphanumeric_count <= 2 and len(text) >= 3:
         return True
 
@@ -336,7 +399,7 @@ class CommentTransformer:
             config: Configuration options (uses defaults if not provided)
         """
         self.config = config or CommentConfig()
-        self._name_counter = 0
+        self._line_counter = 0
 
     def transform_comment(self, comment_text: str) -> CommentTransformResult:
         """
@@ -370,28 +433,30 @@ class CommentTransformer:
             result.is_stripped = True
             return result
 
-        # Anonymize mode
-        transformed = comment_text
-        all_changes = []
+        # Anonymize mode - generate meaningless filler text
+        # Preserve leading whitespace
+        stripped = comment_text.lstrip()
+        leading_spaces = len(comment_text) - len(stripped)
 
-        # Remove system IDs first (before they get partially modified)
-        if self.config.remove_system_ids:
-            transformed, changes = remove_system_ids(transformed)
-            all_changes.extend(changes)
+        if not stripped:
+            # Empty or whitespace-only comment
+            return result
 
-        # Remove personal names
-        if self.config.remove_personal_names:
-            transformed, changes = remove_personal_names(transformed, self._name_counter)
-            all_changes.extend(changes)
-            self._name_counter += len(changes)
+        # Calculate seed for this line (for reproducibility)
+        seed = None
+        if self.config.seed is not None:
+            seed = self.config.seed + self._line_counter
 
-        # Translate Italian terms
-        if self.config.translate_italian:
-            transformed, changes = translate_italian_terms(transformed)
-            all_changes.extend(changes)
+        # Generate filler text matching the length of the actual content
+        content_length = len(stripped)
+        filler = generate_filler_text(content_length, seed)
 
+        # Reconstruct with original leading whitespace
+        transformed = " " * leading_spaces + filler
+
+        self._line_counter += 1
         result.transformed_text = transformed
-        result.changes_made = all_changes
+        result.changes_made = [(comment_text.strip(), filler.strip())]
         return result
 
     def transform_line(self, line: str) -> Tuple[str, CommentTransformResult]:
@@ -429,7 +494,7 @@ class CommentTransformer:
 
     def reset(self) -> None:
         """Reset the transformer state."""
-        self._name_counter = 0
+        self._line_counter = 0
 
 
 def anonymize_comment(

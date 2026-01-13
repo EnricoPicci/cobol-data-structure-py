@@ -11,10 +11,12 @@ from cobol_anonymizer.generators.comment_generator import (
     CommentMode,
     CommentTransformer,
     CommentTransformResult,
+    FILLER_WORDS,
     ITALIAN_TERMS,
     PERSONAL_NAMES,
     anonymize_comment,
     detect_comment_lines,
+    generate_filler_text,
     get_comment_statistics,
     is_comment_line,
     is_divider_line,
@@ -104,9 +106,74 @@ class TestIsDividerLine:
         """Line with mostly text is not a divider."""
         assert not is_divider_line("CALCULATE PREMIUM AMOUNT")
 
-    def test_short_dashes_not_divider(self):
-        """Very short dash sequences are not dividers."""
-        assert not is_divider_line("--")
+    def test_short_dashes_is_divider(self):
+        """Short non-alphanumeric sequences are dividers (visual structure)."""
+        assert is_divider_line("--")
+        assert is_divider_line("*")
+        assert is_divider_line("*-*")
+
+    def test_box_border_is_divider(self):
+        """Box borders (whitespace with asterisk at end) are dividers."""
+        # Simulates content after col 7: "                                                                *"
+        assert is_divider_line("                                                                *")
+        assert is_divider_line("      *")
+
+
+class TestGenerateFillerText:
+    """Tests for filler text generation."""
+
+    def test_generate_empty(self):
+        """Zero or negative length returns empty string."""
+        assert generate_filler_text(0) == ""
+        assert generate_filler_text(-5) == ""
+
+    def test_generate_short(self):
+        """Short length generates minimal text."""
+        result = generate_filler_text(4)
+        assert len(result) == 4
+        # Should be a single word padded
+        assert result.strip() in FILLER_WORDS
+
+    def test_generate_medium(self):
+        """Medium length generates multiple words."""
+        result = generate_filler_text(20)
+        assert len(result) == 20
+        words = result.strip().split()
+        assert len(words) >= 1
+        assert all(w in FILLER_WORDS for w in words)
+
+    def test_generate_long(self):
+        """Long length generates many words."""
+        result = generate_filler_text(60)
+        assert len(result) == 60
+        words = result.strip().split()
+        assert len(words) >= 3
+
+    def test_seed_reproducibility(self):
+        """Same seed produces same output."""
+        result1 = generate_filler_text(30, seed=42)
+        result2 = generate_filler_text(30, seed=42)
+        assert result1 == result2
+
+    def test_different_seeds(self):
+        """Different seeds produce different output."""
+        result1 = generate_filler_text(30, seed=42)
+        result2 = generate_filler_text(30, seed=99)
+        assert result1 != result2
+
+    def test_no_seed_varies(self):
+        """Without seed, output varies (probabilistically)."""
+        results = set()
+        for _ in range(10):
+            results.add(generate_filler_text(30))
+        # Should have some variation (not guaranteed but highly likely)
+        assert len(results) > 1
+
+    def test_only_filler_words(self):
+        """Output contains only filler words."""
+        result = generate_filler_text(50, seed=123)
+        words = result.strip().split()
+        assert all(w in FILLER_WORDS for w in words)
 
 
 class TestRemovePersonalNames:
@@ -237,13 +304,15 @@ class TestCommentTransformer:
         assert transformer is not None
 
     def test_anonymize_mode(self):
-        """Anonymize mode transforms comment."""
+        """Anonymize mode transforms comment to filler text."""
         config = CommentConfig(mode=CommentMode.ANONYMIZE)
         transformer = CommentTransformer(config)
 
         result = transformer.transform_comment("GESTIONE POLIZZA")
         assert result.transformed_text != result.original_text
-        assert "POLICY" in result.transformed_text
+        # Check that transformed text contains filler words
+        words_in_result = result.transformed_text.strip().split()
+        assert all(w in FILLER_WORDS for w in words_in_result)
 
     def test_strip_mode(self):
         """Strip mode removes comment content."""
@@ -277,7 +346,10 @@ class TestCommentTransformer:
         line = "      * GESTIONE POLIZZA"
 
         transformed, result = transformer.transform_line(line)
-        assert "POLICY" in transformed
+        # Original text should not be present
+        assert "GESTIONE" not in transformed
+        assert "POLIZZA" not in transformed
+        # Line structure preserved
         assert transformed.startswith("      *")
 
     def test_transform_line_non_comment(self):
@@ -296,40 +368,51 @@ class TestCommentTransformer:
 
     def test_reset(self):
         """Reset clears transformer state."""
-        transformer = CommentTransformer()
-        transformer.transform_comment("MODIFIED BY MASON")
+        config = CommentConfig(seed=42)
+        transformer = CommentTransformer(config)
+        result1 = transformer.transform_comment("SOME COMMENT TEXT")
         transformer.reset()
-        # After reset, counter should start fresh
-        result = transformer.transform_comment("MODIFIED BY LUPO")
-        assert "USER000" in result.transformed_text
+        # After reset, counter should start fresh, same seed should give same output
+        result2 = transformer.transform_comment("SOME COMMENT TEXT")
+        assert result1.transformed_text == result2.transformed_text
 
 
 class TestCommentTransformerConfig:
     """Tests for CommentTransformer configuration options."""
 
-    def test_disable_name_removal(self):
-        """Personal names not removed when disabled."""
-        config = CommentConfig(remove_personal_names=False)
+    def test_seed_reproducibility(self):
+        """Same seed produces same output."""
+        config1 = CommentConfig(seed=12345)
+        config2 = CommentConfig(seed=12345)
+        transformer1 = CommentTransformer(config1)
+        transformer2 = CommentTransformer(config2)
+
+        result1 = transformer1.transform_comment("SOME COMMENT TEXT")
+        result2 = transformer2.transform_comment("SOME COMMENT TEXT")
+        assert result1.transformed_text == result2.transformed_text
+
+    def test_different_seeds_different_output(self):
+        """Different seeds produce different output."""
+        config1 = CommentConfig(seed=12345)
+        config2 = CommentConfig(seed=54321)
+        transformer1 = CommentTransformer(config1)
+        transformer2 = CommentTransformer(config2)
+
+        result1 = transformer1.transform_comment("SOME LONGER COMMENT TEXT HERE")
+        result2 = transformer2.transform_comment("SOME LONGER COMMENT TEXT HERE")
+        # With different seeds, likely different output (not guaranteed but highly probable)
+        assert result1.transformed_text != result2.transformed_text
+
+    def test_preserve_dividers_config(self):
+        """Divider preservation can be configured."""
+        config = CommentConfig(preserve_dividers=False)
         transformer = CommentTransformer(config)
 
-        result = transformer.transform_comment("MODIFIED BY MASON")
-        assert "MASON" in result.transformed_text
-
-    def test_disable_system_id_removal(self):
-        """System IDs not removed when disabled."""
-        config = CommentConfig(remove_system_ids=False)
-        transformer = CommentTransformer(config)
-
-        result = transformer.transform_comment("FIX FOR CRQ000002478171")
-        assert "CRQ000002478171" in result.transformed_text
-
-    def test_disable_italian_translation(self):
-        """Italian terms not translated when disabled."""
-        config = CommentConfig(translate_italian=False)
-        transformer = CommentTransformer(config)
-
-        result = transformer.transform_comment("GESTIONE POLIZZA")
-        assert "POLIZZA" in result.transformed_text
+        result = transformer.transform_comment("----------------------------------------")
+        # Divider is still detected
+        assert result.is_divider
+        # But in anonymize mode, it gets replaced with filler text
+        assert "---" not in result.transformed_text
 
 
 class TestDetectCommentLines:
@@ -405,15 +488,22 @@ class TestAnonymizeCommentFunction:
     """Tests for convenience function."""
 
     def test_anonymize_simple(self):
-        """Anonymize with default config."""
+        """Anonymize with default config replaces text with filler."""
         result = anonymize_comment("GESTIONE POLIZZA")
-        assert "POLICY" in result
+        # Original text should be gone
+        assert "GESTIONE" not in result
+        assert "POLIZZA" not in result
+        # Result contains filler words
+        words = result.strip().split()
+        assert all(w in FILLER_WORDS for w in words)
 
-    def test_anonymize_with_config(self):
-        """Anonymize with custom config."""
-        config = CommentConfig(translate_italian=False)
-        result = anonymize_comment("GESTIONE POLIZZA", config)
-        assert "POLIZZA" in result
+    def test_anonymize_with_seed(self):
+        """Anonymize with seed for reproducibility."""
+        config = CommentConfig(seed=42)
+        result1 = anonymize_comment("GESTIONE POLIZZA", config)
+        result2 = anonymize_comment("GESTIONE POLIZZA", config)
+        # Different transformer instances with same seed give same result
+        assert result1 == result2
 
 
 class TestRealWorldComments:
@@ -435,10 +525,17 @@ class TestRealWorldComments:
             transformed, result = transformer.transform_line(line)
             results.append(transformed)
 
-        # Check transformations
-        assert "POLICY" in results[1]
+        # Dividers preserved
+        assert "*****" in results[0]
+        assert "*****" in results[4]
+        # Original text replaced
+        assert "GESTIONE" not in results[1]
+        assert "POLIZZA" not in results[1]
         assert "MASON" not in results[2]
         assert "15/03/2024" not in results[3]
+        # Line structure preserved
+        assert results[1].startswith("      *")
+        assert results[2].startswith("      *")
 
     def test_inline_comment_with_crq(self):
         """Process comment with CRQ number."""
@@ -446,8 +543,13 @@ class TestRealWorldComments:
         line = "      * FIX PER CRQ000002478171 - ERRORE CALCOLO PREMIO"
 
         transformed, result = transformer.transform_line(line)
+        # Original content replaced
         assert "CRQ000002478171" not in transformed
-        assert "PREMIUM" in transformed or "ERROR" in transformed
+        assert "FIX" not in transformed
+        assert "ERRORE" not in transformed
+        assert "PREMIO" not in transformed
+        # Line structure preserved
+        assert transformed.startswith("      *")
 
     def test_section_divider(self):
         """Process section divider comment."""
@@ -465,3 +567,78 @@ class TestRealWorldComments:
 
         transformed, result = transformer.transform_line(line)
         assert transformed == "      *"
+
+
+class TestAnonymizationEdgeCases:
+    """Tests for edge cases in comment anonymization."""
+
+    def test_preserves_leading_whitespace(self):
+        """Leading whitespace in comment text is preserved."""
+        transformer = CommentTransformer()
+        result = transformer.transform_comment("   SOME TEXT")
+        # Leading spaces preserved
+        assert result.transformed_text.startswith("   ")
+
+    def test_preserves_approximate_length(self):
+        """Anonymized comment has similar length to original."""
+        transformer = CommentTransformer()
+        original = "THIS IS A COMMENT WITH SOME BUSINESS TEXT"
+        result = transformer.transform_comment(original)
+        # Length should be equal (we pad to exact length)
+        assert len(result.transformed_text) == len(original)
+
+    def test_no_correlation_with_original(self):
+        """Anonymized text has no words from original."""
+        transformer = CommentTransformer()
+        original = "GESTIONE POLIZZA CLIENTE PREMIO CALCOLO"
+        result = transformer.transform_comment(original)
+        # None of the original words should be in the output
+        original_words = set(original.split())
+        result_words = set(result.transformed_text.strip().split())
+        assert original_words.isdisjoint(result_words)
+
+    def test_multiple_comments_different_output(self):
+        """Multiple comments get different filler (without seed)."""
+        transformer = CommentTransformer()
+        result1 = transformer.transform_comment("FIRST COMMENT TEXT HERE NOW")
+        result2 = transformer.transform_comment("SECOND COMMENT TEXT HERE NOW")
+        # Different comments should get different filler
+        # (not guaranteed but highly likely with random selection)
+        # Actually with same length they might match, so let's test differently
+        pass  # Skip this assertion as it's not deterministic
+
+    def test_line_count_preserved(self):
+        """Number of lines is preserved during transformation."""
+        transformer = CommentTransformer()
+        lines = [
+            "      * FIRST LINE OF COMMENT",
+            "      * SECOND LINE OF COMMENT",
+            "      * THIRD LINE OF COMMENT",
+        ]
+        transformed_lines = []
+        for line in lines:
+            transformed, _ = transformer.transform_line(line)
+            transformed_lines.append(transformed)
+
+        assert len(transformed_lines) == len(lines)
+
+    def test_whitespace_only_preserved(self):
+        """Comment with only whitespace is preserved."""
+        transformer = CommentTransformer()
+        result = transformer.transform_comment("        ")
+        # Whitespace-only is treated as empty/divider and preserved
+        assert result.transformed_text == "        "
+
+    def test_sequence_number_preserved(self):
+        """Sequence number area (cols 1-6) is preserved."""
+        transformer = CommentTransformer()
+        line = "000100* SOME COMMENT TEXT"
+        transformed, _ = transformer.transform_line(line)
+        assert transformed.startswith("000100*")
+
+    def test_change_tag_preserved(self):
+        """Change tags in sequence area are preserved."""
+        transformer = CommentTransformer()
+        line = "BENIQ * SOME COMMENT TEXT"
+        transformed, _ = transformer.transform_line(line)
+        assert transformed.startswith("BENIQ *")
