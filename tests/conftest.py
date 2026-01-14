@@ -3,7 +3,6 @@ Pytest configuration and fixtures for COBOL Anonymizer tests.
 """
 
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture

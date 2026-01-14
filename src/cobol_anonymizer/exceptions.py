@@ -5,7 +5,7 @@ This module defines all custom exceptions used throughout the anonymizer,
 organized in a hierarchy for easy handling.
 """
 
-from typing import List, Optional
+from typing import Optional
 
 
 class AnonymizerError(Exception):
@@ -75,9 +75,7 @@ class ColumnOverflowError(ValidationError):
         self.actual_length = actual_length
         self.max_length = max_length
         if message is None:
-            message = (
-                f"Code area exceeds column 72 ({actual_length} > {max_length} chars)"
-            )
+            message = f"Code area exceeds column 72 ({actual_length} > {max_length} chars)"
         super().__init__(f"{file}:{line}: {message}")
 
 
@@ -160,7 +158,7 @@ class CircularDependencyError(AnonymizerError):
         cycle: List of copybook names forming the cycle
     """
 
-    def __init__(self, cycle: List[str]):
+    def __init__(self, cycle: list[str]):
         self.cycle = cycle
         cycle_str = " -> ".join(cycle)
         super().__init__(f"Circular COPY dependency detected: {cycle_str}")
@@ -178,8 +176,7 @@ class ReservedWordCollisionError(MappingError):
         self.identifier = identifier
         self.reserved_word = reserved_word
         super().__init__(
-            f"Generated identifier '{identifier}' collides with "
-            f"reserved word '{reserved_word}'"
+            f"Generated identifier '{identifier}' collides with " f"reserved word '{reserved_word}'"
         )
 
 

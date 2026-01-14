@@ -5,10 +5,14 @@ Tests for name generation and mapping functionality.
 """
 
 import pytest
-import tempfile
-from pathlib import Path
 
 from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.core.mapper import (
+    MappingEntry,
+    MappingTable,
+    create_mapping_report,
+)
+from cobol_anonymizer.exceptions import IdentifierLengthError, ReservedWordCollisionError
 from cobol_anonymizer.generators.name_generator import (
     NAME_PREFIXES,
     NameGenerator,
@@ -17,12 +21,6 @@ from cobol_anonymizer.generators.name_generator import (
     generate_anonymized_name,
     validate_generated_name,
 )
-from cobol_anonymizer.core.mapper import (
-    MappingEntry,
-    MappingTable,
-    create_mapping_report,
-)
-from cobol_anonymizer.exceptions import IdentifierLengthError, ReservedWordCollisionError
 
 
 class TestNamePrefixes:

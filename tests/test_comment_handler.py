@@ -4,16 +4,12 @@ Tests for Phase 8: Comment Handler.
 Tests for comment anonymization functionality.
 """
 
-import pytest
-
 from cobol_anonymizer.generators.comment_generator import (
+    FILLER_WORDS,
+    ITALIAN_TERMS,
     CommentConfig,
     CommentMode,
     CommentTransformer,
-    CommentTransformResult,
-    FILLER_WORDS,
-    ITALIAN_TERMS,
-    PERSONAL_NAMES,
     anonymize_comment,
     detect_comment_lines,
     generate_filler_text,
@@ -114,7 +110,7 @@ class TestIsDividerLine:
 
     def test_box_border_is_divider(self):
         """Box borders (whitespace with asterisk at end) are dividers."""
-        # Simulates content after col 7: "                                                                *"
+        # Simulates content after col 7 with spaces and asterisk at end
         assert is_divider_line("                                                                *")
         assert is_divider_line("      *")
 
@@ -600,8 +596,8 @@ class TestAnonymizationEdgeCases:
     def test_multiple_comments_different_output(self):
         """Multiple comments get different filler (without seed)."""
         transformer = CommentTransformer()
-        result1 = transformer.transform_comment("FIRST COMMENT TEXT HERE NOW")
-        result2 = transformer.transform_comment("SECOND COMMENT TEXT HERE NOW")
+        transformer.transform_comment("FIRST COMMENT TEXT HERE NOW")
+        transformer.transform_comment("SECOND COMMENT TEXT HERE NOW")
         # Different comments should get different filler
         # (not guaranteed but highly likely with random selection)
         # Actually with same length they might match, so let's test differently

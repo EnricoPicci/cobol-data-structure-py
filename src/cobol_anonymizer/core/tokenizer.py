@@ -21,37 +21,37 @@ Token types:
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import List, Optional, Iterator
+from typing import Optional
 
-from cobol_anonymizer.cobol.reserved_words import (
-    is_reserved_word,
-    is_figurative_constant,
-    is_system_identifier,
-)
 from cobol_anonymizer.cobol.pic_parser import (
     find_pic_clauses,
     find_usage_clauses,
-    PICClause,
+)
+from cobol_anonymizer.cobol.reserved_words import (
+    is_figurative_constant,
+    is_reserved_word,
+    is_system_identifier,
 )
 from cobol_anonymizer.core.utils import is_level_number
 
 
 class TokenType(Enum):
     """Types of tokens in COBOL source."""
-    IDENTIFIER = auto()      # User-defined names
-    RESERVED = auto()        # COBOL reserved words
+
+    IDENTIFIER = auto()  # User-defined names
+    RESERVED = auto()  # COBOL reserved words
     LITERAL_STRING = auto()  # String literals 'text' or "text"
-    LITERAL_NUMERIC = auto() # Numeric literals
-    LEVEL_NUMBER = auto()    # Level numbers (01, 05, etc.)
-    OPERATOR = auto()        # +, -, *, /, **, =, etc.
-    PUNCTUATION = auto()     # . , ( ) :
-    WHITESPACE = auto()      # Spaces and tabs
-    COMMENT = auto()         # Comment text
-    PIC_CLAUSE = auto()      # PIC X(30) etc.
-    USAGE_CLAUSE = auto()    # COMP, COMP-3, etc.
-    CONTINUATION = auto()    # Continuation marker
-    COPY_NAME = auto()       # Copybook name in COPY statement
-    UNKNOWN = auto()         # Unrecognized
+    LITERAL_NUMERIC = auto()  # Numeric literals
+    LEVEL_NUMBER = auto()  # Level numbers (01, 05, etc.)
+    OPERATOR = auto()  # +, -, *, /, **, =, etc.
+    PUNCTUATION = auto()  # . , ( ) :
+    WHITESPACE = auto()  # Spaces and tabs
+    COMMENT = auto()  # Comment text
+    PIC_CLAUSE = auto()  # PIC X(30) etc.
+    USAGE_CLAUSE = auto()  # COMP, COMP-3, etc.
+    CONTINUATION = auto()  # Continuation marker
+    COPY_NAME = auto()  # Copybook name in COPY statement
+    UNKNOWN = auto()  # Unrecognized
 
 
 @dataclass
@@ -68,6 +68,7 @@ class Token:
         original_value: Original value (for tracking changes)
         metadata: Additional token-specific data
     """
+
     type: TokenType
     value: str
     start_pos: int
@@ -102,27 +103,27 @@ class Token:
 STRING_LITERAL_PATTERN = re.compile(r"'[^']*'|\"[^\"]*\"")
 
 # Numeric literals (including signed and decimal)
-NUMERIC_LITERAL_PATTERN = re.compile(r'[+-]?\d+(?:\.\d+)?')
+NUMERIC_LITERAL_PATTERN = re.compile(r"[+-]?\d+(?:\.\d+)?")
 
 # COBOL identifier pattern (allows hyphens, no leading/trailing hyphens)
 # Must start with letter, can contain letters, digits, hyphens
-IDENTIFIER_PATTERN = re.compile(r'[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9]|[A-Za-z]')
+IDENTIFIER_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9]|[A-Za-z]")
 
 # Whitespace
-WHITESPACE_PATTERN = re.compile(r'[ \t]+')
+WHITESPACE_PATTERN = re.compile(r"[ \t]+")
 
 # Operators
-OPERATOR_PATTERN = re.compile(r'\*\*|[+\-*/=<>]')
+OPERATOR_PATTERN = re.compile(r"\*\*|[+\-*/=<>]")
 
 # Punctuation
-PUNCTUATION_PATTERN = re.compile(r'[.,():;]')
+PUNCTUATION_PATTERN = re.compile(r"[.,():;]")
 
 
 def tokenize_line(
     line: str,
     line_number: int = 1,
     is_comment: bool = False,
-) -> List[Token]:
+) -> list[Token]:
     """
     Tokenize a COBOL source line.
 
@@ -138,13 +139,15 @@ def tokenize_line(
 
     if is_comment:
         # Entire line is a comment
-        tokens.append(Token(
-            type=TokenType.COMMENT,
-            value=line,
-            start_pos=0,
-            end_pos=len(line),
-            line_number=line_number,
-        ))
+        tokens.append(
+            Token(
+                type=TokenType.COMMENT,
+                value=line,
+                start_pos=0,
+                end_pos=len(line),
+                line_number=line_number,
+            )
+        )
         return tokens
 
     # Find protected ranges (PIC and USAGE clauses)
@@ -166,13 +169,15 @@ def tokenize_line(
         for start, end, token_type, raw in protected_ranges:
             if start <= pos < end:
                 # Create token for the entire protected range
-                tokens.append(Token(
-                    type=token_type,
-                    value=raw,
-                    start_pos=start,
-                    end_pos=end,
-                    line_number=line_number,
-                ))
+                tokens.append(
+                    Token(
+                        type=token_type,
+                        value=raw,
+                        start_pos=start,
+                        end_pos=end,
+                        line_number=line_number,
+                    )
+                )
                 pos = end
                 in_protected = True
                 break
@@ -185,52 +190,60 @@ def tokenize_line(
         # Whitespace
         match = WHITESPACE_PATTERN.match(line, pos)
         if match:
-            tokens.append(Token(
-                type=TokenType.WHITESPACE,
-                value=match.group(),
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-            ))
+            tokens.append(
+                Token(
+                    type=TokenType.WHITESPACE,
+                    value=match.group(),
+                    start_pos=pos,
+                    end_pos=match.end(),
+                    line_number=line_number,
+                )
+            )
             pos = match.end()
             continue
 
         # String literals
         match = STRING_LITERAL_PATTERN.match(line, pos)
         if match:
-            tokens.append(Token(
-                type=TokenType.LITERAL_STRING,
-                value=match.group(),
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-            ))
+            tokens.append(
+                Token(
+                    type=TokenType.LITERAL_STRING,
+                    value=match.group(),
+                    start_pos=pos,
+                    end_pos=match.end(),
+                    line_number=line_number,
+                )
+            )
             pos = match.end()
             continue
 
         # Operators (check before numeric to handle +/- signs)
         match = OPERATOR_PATTERN.match(line, pos)
         if match:
-            tokens.append(Token(
-                type=TokenType.OPERATOR,
-                value=match.group(),
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-            ))
+            tokens.append(
+                Token(
+                    type=TokenType.OPERATOR,
+                    value=match.group(),
+                    start_pos=pos,
+                    end_pos=match.end(),
+                    line_number=line_number,
+                )
+            )
             pos = match.end()
             continue
 
         # Punctuation
         match = PUNCTUATION_PATTERN.match(line, pos)
         if match:
-            tokens.append(Token(
-                type=TokenType.PUNCTUATION,
-                value=match.group(),
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-            ))
+            tokens.append(
+                Token(
+                    type=TokenType.PUNCTUATION,
+                    value=match.group(),
+                    start_pos=pos,
+                    end_pos=match.end(),
+                    line_number=line_number,
+                )
+            )
             pos = match.end()
             continue
 
@@ -242,13 +255,15 @@ def tokenize_line(
             # Check if this could be a level number (first non-whitespace on line)
             preceding_tokens = [t for t in tokens if t.type != TokenType.WHITESPACE]
             if not preceding_tokens and is_level_number(value):
-                tokens.append(Token(
-                    type=TokenType.LEVEL_NUMBER,
-                    value=value,
-                    start_pos=pos,
-                    end_pos=match.end(),
-                    line_number=line_number,
-                ))
+                tokens.append(
+                    Token(
+                        type=TokenType.LEVEL_NUMBER,
+                        value=value,
+                        start_pos=pos,
+                        end_pos=match.end(),
+                        line_number=line_number,
+                    )
+                )
                 pos = match.end()
                 continue
 
@@ -256,7 +271,7 @@ def tokenize_line(
         match = IDENTIFIER_PATTERN.match(line, pos)
         if match:
             value = match.group()
-            upper_value = value.upper()
+            value.upper()
 
             # Determine token type
             if is_level_number(value):
@@ -273,44 +288,50 @@ def tokenize_line(
                 token_type = TokenType.IDENTIFIER
                 metadata = {}
 
-            tokens.append(Token(
-                type=token_type,
-                value=value,
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-                metadata=metadata if 'metadata' in dir() else {},
-            ))
+            tokens.append(
+                Token(
+                    type=token_type,
+                    value=value,
+                    start_pos=pos,
+                    end_pos=match.end(),
+                    line_number=line_number,
+                    metadata=metadata if "metadata" in dir() else {},
+                )
+            )
             pos = match.end()
             continue
 
         # Numeric literals (standalone numbers after identifiers have been checked)
         match = NUMERIC_LITERAL_PATTERN.match(line, pos)
         if match:
-            tokens.append(Token(
-                type=TokenType.LITERAL_NUMERIC,
-                value=match.group(),
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-            ))
+            tokens.append(
+                Token(
+                    type=TokenType.LITERAL_NUMERIC,
+                    value=match.group(),
+                    start_pos=pos,
+                    end_pos=match.end(),
+                    line_number=line_number,
+                )
+            )
             pos = match.end()
             continue
 
         # Unknown character - advance by one
-        tokens.append(Token(
-            type=TokenType.UNKNOWN,
-            value=line[pos],
-            start_pos=pos,
-            end_pos=pos + 1,
-            line_number=line_number,
-        ))
+        tokens.append(
+            Token(
+                type=TokenType.UNKNOWN,
+                value=line[pos],
+                start_pos=pos,
+                end_pos=pos + 1,
+                line_number=line_number,
+            )
+        )
         pos += 1
 
     return tokens
 
 
-def reconstruct_from_tokens(tokens: List[Token]) -> str:
+def reconstruct_from_tokens(tokens: list[Token]) -> str:
     """
     Reconstruct a line from its tokens.
 
@@ -341,7 +362,7 @@ def reconstruct_from_tokens(tokens: List[Token]) -> str:
     return "".join(result)
 
 
-def get_identifiers(tokens: List[Token]) -> List[Token]:
+def get_identifiers(tokens: list[Token]) -> list[Token]:
     """
     Extract all identifier tokens from a token list.
 
@@ -354,7 +375,7 @@ def get_identifiers(tokens: List[Token]) -> List[Token]:
     return [t for t in tokens if t.type == TokenType.IDENTIFIER]
 
 
-def get_literals(tokens: List[Token]) -> List[Token]:
+def get_literals(tokens: list[Token]) -> list[Token]:
     """
     Extract all literal tokens from a token list.
 
@@ -364,11 +385,12 @@ def get_literals(tokens: List[Token]) -> List[Token]:
     Returns:
         List of literal tokens (string and numeric)
     """
-    return [t for t in tokens
-            if t.type in (TokenType.LITERAL_STRING, TokenType.LITERAL_NUMERIC)]
+    return [t for t in tokens if t.type in (TokenType.LITERAL_STRING, TokenType.LITERAL_NUMERIC)]
 
 
-def find_token_by_value(tokens: List[Token], value: str, case_insensitive: bool = True) -> Optional[Token]:
+def find_token_by_value(
+    tokens: list[Token], value: str, case_insensitive: bool = True
+) -> Optional[Token]:
     """
     Find a token by its value.
 
@@ -390,7 +412,7 @@ def find_token_by_value(tokens: List[Token], value: str, case_insensitive: bool 
     return None
 
 
-def contains_copy_statement(tokens: List[Token]) -> bool:
+def contains_copy_statement(tokens: list[Token]) -> bool:
     """
     Check if the tokens contain a COPY statement.
 
@@ -406,7 +428,7 @@ def contains_copy_statement(tokens: List[Token]) -> bool:
     return False
 
 
-def get_copy_name(tokens: List[Token]) -> Optional[str]:
+def get_copy_name(tokens: list[Token]) -> Optional[str]:
     """
     Extract the copybook name from a COPY statement.
 
@@ -432,7 +454,7 @@ def get_copy_name(tokens: List[Token]) -> Optional[str]:
     return None
 
 
-def is_data_definition_line(tokens: List[Token]) -> bool:
+def is_data_definition_line(tokens: list[Token]) -> bool:
     """
     Check if the tokens represent a data definition line.
 
@@ -453,7 +475,7 @@ def is_data_definition_line(tokens: List[Token]) -> bool:
     return False
 
 
-def is_procedure_statement(tokens: List[Token]) -> bool:
+def is_procedure_statement(tokens: list[Token]) -> bool:
     """
     Check if the tokens represent a procedure division statement.
 
@@ -469,12 +491,40 @@ def is_procedure_statement(tokens: List[Token]) -> bool:
             continue
         if token.type == TokenType.RESERVED:
             # Common procedure verbs
-            verbs = {"MOVE", "ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "COMPUTE",
-                     "IF", "ELSE", "END-IF", "PERFORM", "CALL", "GO", "GOBACK",
-                     "STOP", "EXIT", "EVALUATE", "WHEN", "END-EVALUATE",
-                     "DISPLAY", "ACCEPT", "READ", "WRITE", "REWRITE", "DELETE",
-                     "OPEN", "CLOSE", "INITIALIZE", "SET", "STRING", "UNSTRING",
-                     "INSPECT", "SEARCH"}
+            verbs = {
+                "MOVE",
+                "ADD",
+                "SUBTRACT",
+                "MULTIPLY",
+                "DIVIDE",
+                "COMPUTE",
+                "IF",
+                "ELSE",
+                "END-IF",
+                "PERFORM",
+                "CALL",
+                "GO",
+                "GOBACK",
+                "STOP",
+                "EXIT",
+                "EVALUATE",
+                "WHEN",
+                "END-EVALUATE",
+                "DISPLAY",
+                "ACCEPT",
+                "READ",
+                "WRITE",
+                "REWRITE",
+                "DELETE",
+                "OPEN",
+                "CLOSE",
+                "INITIALIZE",
+                "SET",
+                "STRING",
+                "UNSTRING",
+                "INSPECT",
+                "SEARCH",
+            }
             return token.value.upper() in verbs
         if token.type == TokenType.IDENTIFIER:
             # Could be a paragraph name followed by SECTION or just an identifier

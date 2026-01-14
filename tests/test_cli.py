@@ -4,20 +4,21 @@ Tests for Phase 10: CLI and Configuration.
 Tests for command-line interface and configuration handling.
 """
 
-import pytest
 import json
 from pathlib import Path
 
+import pytest
+
+from cobol_anonymizer.cli import (
+    args_to_config,
+    create_parser,
+    main,
+    parse_args,
+)
 from cobol_anonymizer.config import (
     Config,
     create_default_config,
     merge_configs,
-)
-from cobol_anonymizer.cli import (
-    create_parser,
-    parse_args,
-    args_to_config,
-    main,
 )
 from cobol_anonymizer.main import (
     AnonymizationPipeline,
@@ -142,10 +143,14 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
         assert args.input == input_dir
         assert args.output == tmp_path / "output"
 
@@ -154,11 +159,15 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--verbose",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--verbose",
+            ]
+        )
         assert args.verbose is True
 
     def test_parse_dry_run(self, tmp_path):
@@ -166,11 +175,15 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--dry-run",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--dry-run",
+            ]
+        )
         assert args.dry_run is True
 
     def test_parse_validate_only(self, tmp_path):
@@ -178,11 +191,15 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--validate-only",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--validate-only",
+            ]
+        )
         assert args.validate_only is True
 
     def test_parse_no_comments(self, tmp_path):
@@ -190,11 +207,15 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--no-comments",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--no-comments",
+            ]
+        )
         assert args.no_comments is True
 
     def test_parse_encoding(self, tmp_path):
@@ -202,11 +223,16 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--encoding", "utf-8",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--encoding",
+                "utf-8",
+            ]
+        )
         assert args.encoding == "utf-8"
 
     def test_parse_seed(self, tmp_path):
@@ -214,11 +240,16 @@ class TestArgParser:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--seed", "42",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--seed",
+                "42",
+            ]
+        )
         assert args.seed == 42
 
 
@@ -230,10 +261,14 @@ class TestArgsToConfig:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
         config = args_to_config(args)
 
         assert config.input_dir == input_dir
@@ -244,14 +279,18 @@ class TestArgsToConfig:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
-        args = parse_args([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--no-programs",
-            "--no-comments",
-            "--dry-run",
-            "--verbose",
-        ])
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--no-programs",
+                "--no-comments",
+                "--dry-run",
+                "--verbose",
+            ]
+        )
         config = args_to_config(args)
 
         assert config.anonymize_programs is False
@@ -271,10 +310,14 @@ class TestMainFunction:
 
     def test_main_missing_input(self, tmp_path):
         """Main returns error for missing input dir."""
-        result = main([
-            "--input", str(tmp_path / "nonexistent"),
-            "--output", str(tmp_path / "output"),
-        ])
+        result = main(
+            [
+                "--input",
+                str(tmp_path / "nonexistent"),
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
         assert result == 1
 
     def test_main_validate_only(self, tmp_path):
@@ -286,12 +329,16 @@ class TestMainFunction:
         test_file = input_dir / "test.cob"
         test_file.write_text("       01 WS-FIELD PIC X.\n")
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(tmp_path / "output"),
-            "--validate-only",
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--validate-only",
+                "--quiet",
+            ]
+        )
         assert result == 0
 
     def test_main_dry_run(self, tmp_path):
@@ -305,12 +352,16 @@ class TestMainFunction:
 
         output_dir = tmp_path / "output"
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--dry-run",
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--dry-run",
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         # Output directory should not be created in dry-run
@@ -345,7 +396,8 @@ class TestAnonymizationPipeline:
 
         # Create a simple COBOL file
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       IDENTIFICATION DIVISION.
+        test_file.write_text(
+            """       IDENTIFICATION DIVISION.
        PROGRAM-ID. TESTPROG.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
@@ -353,7 +405,8 @@ class TestAnonymizationPipeline:
        PROCEDURE DIVISION.
        MAIN-PARA.
            STOP RUN.
-""")
+"""
+        )
 
         config = Config(
             input_dir=input_dir,
@@ -448,7 +501,8 @@ class TestMappingsFileGeneration:
 
         # Create a simple COBOL file
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       IDENTIFICATION DIVISION.
+        test_file.write_text(
+            """       IDENTIFICATION DIVISION.
        PROGRAM-ID. TESTPROG.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
@@ -456,13 +510,18 @@ class TestMappingsFileGeneration:
        PROCEDURE DIVISION.
        MAIN-PARA.
            STOP RUN.
-""")
+"""
+        )
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         mappings_file = output_dir / "mappings.json"
@@ -483,19 +542,26 @@ class TestMappingsFileGeneration:
 
         # Create a simple COBOL file
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       IDENTIFICATION DIVISION.
+        test_file.write_text(
+            """       IDENTIFICATION DIVISION.
        PROGRAM-ID. TESTPROG.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
        01 WS-FIELD PIC X(10).
-""")
+"""
+        )
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--mapping-file", str(custom_mappings),
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--mapping-file",
+                str(custom_mappings),
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         assert custom_mappings.exists(), "mappings should be saved to custom path"
@@ -511,15 +577,21 @@ class TestMappingsFileGeneration:
 
         # Create a simple COBOL file
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       01 WS-FIELD PIC X(10).
-""")
+        test_file.write_text(
+            """       01 WS-FIELD PIC X(10).
+"""
+        )
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--dry-run",
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--dry-run",
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         mappings_file = output_dir / "mappings.json"
@@ -533,7 +605,8 @@ class TestMappingsFileGeneration:
 
         # Create a COBOL file with identifiable names
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       IDENTIFICATION DIVISION.
+        test_file.write_text(
+            """       IDENTIFICATION DIVISION.
        PROGRAM-ID. MYPROG.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
@@ -542,13 +615,18 @@ class TestMappingsFileGeneration:
        PROCEDURE DIVISION.
        INIT-PROCESS.
            STOP RUN.
-""")
+"""
+        )
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         mappings_file = output_dir / "mappings.json"
@@ -570,16 +648,23 @@ class TestMappingsFileGeneration:
 
         # Create a simple COBOL file
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       01 WS-TEST-FIELD PIC X(10).
-""")
+        test_file.write_text(
+            """       01 WS-TEST-FIELD PIC X(10).
+"""
+        )
 
         # Test with numeric scheme
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--naming-scheme", "numeric",
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--naming-scheme",
+                "numeric",
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         mappings_file = output_dir / "mappings.json"
@@ -598,15 +683,22 @@ class TestMappingsFileGeneration:
         output_dir = tmp_path / "output"
 
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       01 WS-CUSTOMER-DATA PIC X(20).
-""")
+        test_file.write_text(
+            """       01 WS-CUSTOMER-DATA PIC X(20).
+"""
+        )
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--naming-scheme", "animals",
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--naming-scheme",
+                "animals",
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         mappings_file = output_dir / "mappings.json"
@@ -621,15 +713,22 @@ class TestMappingsFileGeneration:
         output_dir = tmp_path / "output"
 
         test_file = input_dir / "test.cob"
-        test_file.write_text("""       01 WS-ACCOUNT-INFO PIC X(15).
-""")
+        test_file.write_text(
+            """       01 WS-ACCOUNT-INFO PIC X(15).
+"""
+        )
 
-        result = main([
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--naming-scheme", "corporate",
-            "--quiet",
-        ])
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--naming-scheme",
+                "corporate",
+                "--quiet",
+            ]
+        )
 
         assert result == 0
         mappings_file = output_dir / "mappings.json"

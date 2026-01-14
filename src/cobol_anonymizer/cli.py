@@ -12,16 +12,15 @@ Usage:
 
 import argparse
 import sys
-import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from cobol_anonymizer import __version__
 from cobol_anonymizer.config import Config, create_default_config
-from cobol_anonymizer.main import AnonymizationPipeline
-from cobol_anonymizer.output.validator import OutputValidator
-from cobol_anonymizer.output.report import create_summary_report
 from cobol_anonymizer.generators.naming_schemes import NamingScheme
+from cobol_anonymizer.main import AnonymizationPipeline
+from cobol_anonymizer.output.report import create_summary_report
+from cobol_anonymizer.output.validator import OutputValidator
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -40,7 +39,8 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Input/Output
     parser.add_argument(
-        "-i", "--input",
+        "-i",
+        "--input",
         type=Path,
         required=True,
         help="Input directory containing COBOL source files",
@@ -48,7 +48,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         required=True,
         help="Output directory for anonymized files",
@@ -56,7 +57,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "-c", "--config",
+        "-c",
+        "--config",
         type=Path,
         help="Configuration file (JSON)",
         metavar="FILE",
@@ -144,13 +146,15 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Output options
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
 
     parser.add_argument(
-        "-q", "--quiet",
+        "-q",
+        "--quiet",
         action="store_true",
         help="Suppress normal output",
     )
@@ -174,11 +178,11 @@ def create_parser() -> argparse.ArgumentParser:
         choices=["numeric", "animals", "food", "fantasy", "corporate"],
         default="corporate",
         help="Naming scheme for anonymized identifiers: "
-             "numeric (e.g., D00000001), "
-             "animals (e.g., FLUFFY-LLAMA-1), "
-             "food (e.g., SPICY-TACO-1), "
-             "fantasy (e.g., SNEAKY-DRAGON-1), "
-             "corporate (default, e.g., AGILE-SYNERGY-1)",
+        "numeric (e.g., D00000001), "
+        "animals (e.g., FLUFFY-LLAMA-1), "
+        "food (e.g., SPICY-TACO-1), "
+        "fantasy (e.g., SNEAKY-DRAGON-1), "
+        "corporate (default, e.g., AGILE-SYNERGY-1)",
     )
 
     parser.add_argument(
@@ -190,14 +194,14 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
+def parse_args(args: Optional[list[str]] = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = create_parser()
     return parser.parse_args(args)
 
 
 def _print_issues(
-    issues: List,
+    issues: list,
     label: str,
     limit: int = 10,
     file=None,
@@ -256,6 +260,7 @@ def args_to_config(args: argparse.Namespace) -> Config:
         file_config = Config.load_from_file(args.config)
         # Command-line args override file config
         from cobol_anonymizer.config import merge_configs
+
         config = merge_configs(file_config, config)
 
     return config
@@ -346,13 +351,14 @@ def run_anonymization(config: Config) -> int:
     except Exception as e:
         if config.verbose:
             import traceback
+
             traceback.print_exc()
         else:
             print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
-def main(args: Optional[List[str]] = None) -> int:
+def main(args: Optional[list[str]] = None) -> int:
     """
     Main entry point for CLI.
 

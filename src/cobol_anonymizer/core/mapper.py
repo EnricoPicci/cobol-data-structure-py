@@ -11,10 +11,10 @@ This module provides a global mapping table that:
 
 import csv
 import json
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from typing import Dict, Optional, Set, List, Any
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 from cobol_anonymizer.core.classifier import IdentifierType
 from cobol_anonymizer.generators.name_generator import (
@@ -38,6 +38,7 @@ class MappingEntry:
         first_seen_line: Line number where first seen
         occurrence_count: Number of times this identifier appears
     """
+
     original_name: str
     anonymized_name: str
     id_type: IdentifierType
@@ -46,7 +47,7 @@ class MappingEntry:
     first_seen_line: Optional[int] = None
     occurrence_count: int = 1
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "original_name": self.original_name,
@@ -59,7 +60,7 @@ class MappingEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MappingEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "MappingEntry":
         """Create from dictionary."""
         return cls(
             original_name=data["original_name"],
@@ -89,8 +90,9 @@ class MappingTable:
         anon_name = table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
         # -> "FLUFFY-LLAMA-1"
     """
-    _mappings: Dict[str, MappingEntry] = field(default_factory=dict)
-    _external_names: Set[str] = field(default_factory=set)
+
+    _mappings: dict[str, MappingEntry] = field(default_factory=dict)
+    _external_names: set[str] = field(default_factory=set)
     _generator: NameGenerator = field(default_factory=NameGenerator)
     _preserve_length: bool = True
     _naming_scheme: NamingScheme = NamingScheme.CORPORATE
@@ -228,19 +230,19 @@ class MappingTable:
         """
         self._external_names.add(name.upper())
 
-    def get_all_mappings(self) -> List[MappingEntry]:
+    def get_all_mappings(self) -> list[MappingEntry]:
         """Get all mapping entries."""
         return list(self._mappings.values())
 
-    def get_mappings_by_type(self, id_type: IdentifierType) -> List[MappingEntry]:
+    def get_mappings_by_type(self, id_type: IdentifierType) -> list[MappingEntry]:
         """Get mappings of a specific type."""
         return [e for e in self._mappings.values() if e.id_type == id_type]
 
-    def get_external_names(self) -> Set[str]:
+    def get_external_names(self) -> set[str]:
         """Get all EXTERNAL identifier names."""
         return set(self._external_names)
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get mapping statistics."""
         stats = {
             "total_mappings": len(self._mappings),
@@ -253,16 +255,14 @@ class MappingTable:
                 stats["by_type"][id_type.name] = count
         return stats
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "generated_at": datetime.now().isoformat(),
             "naming_scheme": self._naming_scheme.value,
             "mappings": [e.to_dict() for e in self._mappings.values()],
             "external_names": list(self._external_names),
-            "generator_state": {
-                k.name: v for k, v in self._generator.get_counter_state().items()
-            },
+            "generator_state": {k.name: v for k, v in self._generator.get_counter_state().items()},
         }
 
     def save_to_file(self, path: Path) -> None:
@@ -275,7 +275,7 @@ class MappingTable:
         # Ensure the parent directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
         data = self.to_dict()
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
     def save_to_csv(self, path: Path) -> None:
@@ -296,50 +296,56 @@ class MappingTable:
         timestamp = datetime.now().isoformat()
         scheme_name = self._naming_scheme.value
 
-        with open(path, 'w', newline='', encoding='utf-8') as f:
+        with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
 
             # Write header
-            writer.writerow([
-                'original_name',
-                'anonymized_name',
-                'id_type',
-                'is_external',
-                'first_seen_file',
-                'first_seen_line',
-                'occurrence_count',
-                'naming_scheme',
-                'generated_at',
-            ])
+            writer.writerow(
+                [
+                    "original_name",
+                    "anonymized_name",
+                    "id_type",
+                    "is_external",
+                    "first_seen_file",
+                    "first_seen_line",
+                    "occurrence_count",
+                    "naming_scheme",
+                    "generated_at",
+                ]
+            )
 
             # Write mapping entries
             for entry in self._mappings.values():
-                writer.writerow([
-                    entry.original_name,
-                    entry.anonymized_name,
-                    entry.id_type.name,
-                    str(entry.is_external).lower(),
-                    entry.first_seen_file or '',
-                    entry.first_seen_line if entry.first_seen_line is not None else '',
-                    entry.occurrence_count,
-                    scheme_name,
-                    timestamp,
-                ])
+                writer.writerow(
+                    [
+                        entry.original_name,
+                        entry.anonymized_name,
+                        entry.id_type.name,
+                        str(entry.is_external).lower(),
+                        entry.first_seen_file or "",
+                        entry.first_seen_line if entry.first_seen_line is not None else "",
+                        entry.occurrence_count,
+                        scheme_name,
+                        timestamp,
+                    ]
+                )
 
             # Write external names that weren't already in mappings
             for ext_name in self._external_names:
                 if ext_name not in self._mappings:
-                    writer.writerow([
-                        ext_name,
-                        ext_name,  # External names keep original
-                        'EXTERNAL_NAME',
-                        'true',
-                        '',
-                        '',
-                        0,
-                        scheme_name,
-                        timestamp,
-                    ])
+                    writer.writerow(
+                        [
+                            ext_name,
+                            ext_name,  # External names keep original
+                            "EXTERNAL_NAME",
+                            "true",
+                            "",
+                            "",
+                            0,
+                            scheme_name,
+                            timestamp,
+                        ]
+                    )
 
     @classmethod
     def load_from_file(cls, path: Path) -> "MappingTable":
@@ -352,7 +358,7 @@ class MappingTable:
         Returns:
             Loaded MappingTable instance
         """
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
 
         # Restore naming scheme (default to NUMERIC for backward compatibility)
@@ -406,13 +412,15 @@ def create_mapping_report(table: MappingTable) -> str:
 
     # Statistics
     stats = table.get_statistics()
-    lines.extend([
-        "Statistics:",
-        f"  Total mappings: {stats['total_mappings']}",
-        f"  External items: {stats['external_count']}",
-        "",
-        "Mappings by type:",
-    ])
+    lines.extend(
+        [
+            "Statistics:",
+            f"  Total mappings: {stats['total_mappings']}",
+            f"  External items: {stats['external_count']}",
+            "",
+            "Mappings by type:",
+        ]
+    )
     for type_name, count in stats["by_type"].items():
         lines.append(f"  {type_name}: {count}")
 
@@ -424,10 +432,12 @@ def create_mapping_report(table: MappingTable) -> str:
         if not mappings:
             continue
 
-        lines.extend([
-            f"{id_type.name}:",
-            "-" * 40,
-        ])
+        lines.extend(
+            [
+                f"{id_type.name}:",
+                "-" * 40,
+            ]
+        )
 
         for entry in sorted(mappings, key=lambda e: e.original_name):
             ext_marker = " [EXTERNAL]" if entry.is_external else ""

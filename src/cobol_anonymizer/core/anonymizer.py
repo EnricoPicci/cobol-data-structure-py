@@ -12,58 +12,49 @@ This module provides the main anonymization functionality:
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Optional
 
 from cobol_anonymizer.cobol.column_handler import (
     COBOLLine,
-    parse_line,
     parse_file_line,
-    reconstruct_line,
+    parse_line,
     validate_code_area,
-    extract_line_ending,
 )
-from cobol_anonymizer.cobol.reserved_words import is_reserved_word
+from cobol_anonymizer.cobol.copy_resolver import CopyResolver
 from cobol_anonymizer.cobol.pic_parser import (
-    find_pic_clauses,
-    find_usage_clauses,
     get_protected_ranges,
     has_external_clause,
     has_redefines_clause,
 )
+from cobol_anonymizer.core.classifier import (
+    ClassifiedIdentifier,
+    IdentifierClassifier,
+    IdentifierType,
+)
+from cobol_anonymizer.core.mapper import MappingTable
 from cobol_anonymizer.core.tokenizer import (
     Token,
     TokenType,
     tokenize_line,
-    get_identifiers,
 )
-from cobol_anonymizer.core.classifier import (
-    IdentifierType,
-    IdentifierClassifier,
-    ClassifiedIdentifier,
-)
-from cobol_anonymizer.core.mapper import MappingTable, MappingEntry
-from cobol_anonymizer.cobol.copy_resolver import CopyResolver, CopyStatement
-from cobol_anonymizer.core.utils import is_filler, normalize_identifier
+from cobol_anonymizer.core.utils import is_filler
 from cobol_anonymizer.exceptions import ColumnOverflowError
 from cobol_anonymizer.generators.comment_generator import (
     CommentTransformer,
-    CommentConfig,
-    CommentMode,
 )
 from cobol_anonymizer.generators.naming_schemes import NamingScheme
-
 
 # Pre-compiled regex pattern for REDEFINES clause parsing
 # Pattern: level_number name REDEFINES target_name
 REDEFINES_PATTERN = re.compile(
-    r'(\d+)\s+([A-Za-z][A-Za-z0-9\-]*)\s+REDEFINES\s+([A-Za-z][A-Za-z0-9\-]*)',
-    re.IGNORECASE
+    r"(\d+)\s+([A-Za-z][A-Za-z0-9\-]*)\s+REDEFINES\s+([A-Za-z][A-Za-z0-9\-]*)", re.IGNORECASE
 )
 
 
 @dataclass
 class RedefinesEntry:
     """Tracks a REDEFINES relationship."""
+
     redefining_name: str
     redefined_name: str
     level_number: int
@@ -78,10 +69,11 @@ class RedefinesTracker:
     When we anonymize a data item, any REDEFINES clause that references
     it must also be updated to use the anonymized name.
     """
+
     # original_name -> list of entries that REDEFINE it
-    _relationships: Dict[str, List[RedefinesEntry]] = field(default_factory=dict)
+    _relationships: dict[str, list[RedefinesEntry]] = field(default_factory=dict)
     # redefining_name -> redefined_name
-    _redefines_map: Dict[str, str] = field(default_factory=dict)
+    _redefines_map: dict[str, str] = field(default_factory=dict)
 
     def add_redefines(
         self,
@@ -115,7 +107,7 @@ class RedefinesTracker:
         """Get the original name that this item REDEFINES."""
         return self._redefines_map.get(redefining_name.upper())
 
-    def get_redefining_items(self, redefined_name: str) -> List[RedefinesEntry]:
+    def get_redefining_items(self, redefined_name: str) -> list[RedefinesEntry]:
         """Get all items that REDEFINE the given name."""
         return self._relationships.get(redefined_name.upper(), [])
 
@@ -123,12 +115,13 @@ class RedefinesTracker:
 @dataclass
 class TransformResult:
     """Result of transforming a single line."""
+
     original_line: str
     transformed_line: str
     line_number: int
-    changes_made: List[Tuple[str, str]]  # (original, anonymized)
+    changes_made: list[tuple[str, str]]  # (original, anonymized)
     is_comment: bool = False
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class LineTransformer:
@@ -273,7 +266,7 @@ class LineTransformer:
     def _is_in_protected_range(
         self,
         position: int,
-        ranges: List[Tuple[int, int]],
+        ranges: list[tuple[int, int]],
     ) -> bool:
         """Check if position is in a protected range."""
         for start, end in ranges:
@@ -288,13 +281,11 @@ class LineTransformer:
             level = int(match.group(1))
             redefining = match.group(2)
             redefined = match.group(3)
-            self.redefines_tracker.add_redefines(
-                redefining, redefined, level, line_number
-            )
+            self.redefines_tracker.add_redefines(redefining, redefined, level, line_number)
 
     def _reconstruct_code_area(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         original: str,
     ) -> str:
         """Reconstruct code area from modified tokens."""
@@ -307,7 +298,7 @@ class LineTransformer:
         for token in sorted_tokens:
             # Fill gap with original content
             if token.start_pos > last_end:
-                result.append(original[last_end:token.start_pos])
+                result.append(original[last_end : token.start_pos])
 
             # Add token value (possibly modified)
             result.append(token.value)
@@ -334,10 +325,10 @@ class LineTransformer:
 
         # Reconstruct with sequence, indicator, areas, and identification
         full_line = (
-            original.sequence +
-            original.indicator +
-            new_code_area[:4] +  # Area A
-            new_code_area[4:65]  # Area B
+            original.sequence
+            + original.indicator
+            + new_code_area[:4]  # Area A
+            + new_code_area[4:65]  # Area B
         )
 
         # Add identification area if original was that long
@@ -346,7 +337,7 @@ class LineTransformer:
 
         # Trim or pad to original length
         if original.original_length < len(full_line):
-            full_line = full_line[:original.original_length]
+            full_line = full_line[: original.original_length]
         else:
             full_line = full_line.ljust(original.original_length)
 
@@ -356,12 +347,13 @@ class LineTransformer:
 @dataclass
 class FileTransformResult:
     """Result of transforming a complete file."""
+
     filename: str
     original_path: Path
     total_lines: int
     transformed_lines: int
-    changes: List[TransformResult]
-    warnings: List[str]
+    changes: list[TransformResult]
+    warnings: list[str]
 
 
 class Anonymizer:
@@ -401,10 +393,10 @@ class Anonymizer:
         self.copy_resolver = CopyResolver()
         self.redefines_tracker = RedefinesTracker()
 
-        self._files_processed: Set[str] = set()
-        self._processing_order: List[str] = []
+        self._files_processed: set[str] = set()
+        self._processing_order: list[str] = []
 
-    def discover_files(self) -> List[Path]:
+    def discover_files(self) -> list[Path]:
         """
         Discover all COBOL files and build dependency graph.
 
@@ -432,7 +424,7 @@ class Anonymizer:
 
         return files
 
-    def classify_file(self, file_path: Path) -> List[ClassifiedIdentifier]:
+    def classify_file(self, file_path: Path) -> list[ClassifiedIdentifier]:
         """
         Classify all identifiers in a file.
 
@@ -442,7 +434,7 @@ class Anonymizer:
         Returns:
             List of classified identifiers
         """
-        content = file_path.read_text(encoding='latin-1')
+        content = file_path.read_text(encoding="latin-1")
         lines = content.splitlines()
 
         classifier = IdentifierClassifier(file_path.name)
@@ -457,7 +449,7 @@ class Anonymizer:
 
         return classifier.get_all_identifiers()
 
-    def build_mappings(self, identifiers: List[ClassifiedIdentifier]) -> None:
+    def build_mappings(self, identifiers: list[ClassifiedIdentifier]) -> None:
         """
         Build mappings for all identifiers.
 
@@ -486,7 +478,7 @@ class Anonymizer:
         Returns:
             FileTransformResult with all changes
         """
-        content = file_path.read_text(encoding='latin-1')
+        content = file_path.read_text(encoding="latin-1")
         lines_raw = content.splitlines(keepends=True)
 
         transformer = LineTransformer(
@@ -551,7 +543,7 @@ class Anonymizer:
 
         return result
 
-    def anonymize_all(self) -> List[FileTransformResult]:
+    def anonymize_all(self) -> list[FileTransformResult]:
         """
         Anonymize all discovered files in dependency order.
 
@@ -612,7 +604,7 @@ class Anonymizer:
             lines.append(transform_result.transformed_line)
 
         # Join lines with newlines
-        output_path.write_text("\n".join(lines) + "\n", encoding='latin-1')
+        output_path.write_text("\n".join(lines) + "\n", encoding="latin-1")
 
     def get_mapping_table(self) -> MappingTable:
         """Get the mapping table."""

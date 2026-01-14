@@ -33,28 +33,27 @@ Command-Line Usage:
 __version__ = "1.0.0"
 __author__ = "COBOL Anonymizer Team"
 
+from cobol_anonymizer.config import Config, create_default_config
+from cobol_anonymizer.core.anonymizer import Anonymizer
+from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.core.mapper import MappingTable
 from cobol_anonymizer.exceptions import (
     AnonymizerError,
-    ParseError,
-    MappingError,
-    ValidationError,
+    CircularDependencyError,
     ColumnOverflowError,
-    IdentifierLengthError,
     ConfigError,
     CopyNotFoundError,
-    CircularDependencyError,
+    IdentifierLengthError,
+    MappingError,
+    ParseError,
+    ValidationError,
 )
-
-from cobol_anonymizer.config import Config, create_default_config
 from cobol_anonymizer.main import (
     AnonymizationPipeline,
     AnonymizationResult,
     anonymize_directory,
     validate_directory,
 )
-from cobol_anonymizer.core.anonymizer import Anonymizer
-from cobol_anonymizer.core.mapper import MappingTable
-from cobol_anonymizer.core.classifier import IdentifierType
 
 __all__ = [
     # Version

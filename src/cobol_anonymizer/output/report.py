@@ -13,16 +13,17 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from cobol_anonymizer.core.mapper import MappingTable
-from cobol_anonymizer.core.classifier import IdentifierType
 from cobol_anonymizer.core.anonymizer import FileTransformResult
+from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.core.mapper import MappingTable
 
 
 @dataclass
 class FileStatistics:
     """Statistics for a single file."""
+
     filename: str
     anonymized_filename: str
     total_lines: int
@@ -30,7 +31,7 @@ class FileStatistics:
     identifiers_found: int
     comments_transformed: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "filename": self.filename,
@@ -45,19 +46,20 @@ class FileStatistics:
 @dataclass
 class AnonymizationReport:
     """Complete anonymization report."""
+
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     tool_version: str = "1.0.0"
     source_directory: str = ""
     output_directory: str = ""
-    file_statistics: List[FileStatistics] = field(default_factory=list)
+    file_statistics: list[FileStatistics] = field(default_factory=list)
     mapping_table: Optional[MappingTable] = None
     total_files: int = 0
     total_lines: int = 0
     total_identifiers: int = 0
-    external_names: List[str] = field(default_factory=list)
+    external_names: list[str] = field(default_factory=list)
     processing_time_seconds: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert report to dictionary."""
         # Get statistics by identifier type
         type_stats = {}
@@ -212,7 +214,7 @@ class ReportGenerator:
 
     def generate_report(
         self,
-        file_results: List[FileTransformResult],
+        file_results: list[FileTransformResult],
         processing_time: float = 0.0,
     ) -> AnonymizationReport:
         """
@@ -238,16 +240,17 @@ class ReportGenerator:
             report.total_lines += result.total_lines
 
             # Create file statistics
-            filename = getattr(result, 'filename', None) or str(getattr(result, 'original_path', 'unknown'))
+            filename = getattr(result, "filename", None) or str(
+                getattr(result, "original_path", "unknown")
+            )
             fs = FileStatistics(
                 filename=filename,
                 anonymized_filename=filename,  # Will be updated if anonymized name available
                 total_lines=result.total_lines,
                 transformed_lines=result.transformed_lines,
-                identifiers_found=len(set(
-                    orig for change in result.changes
-                    for orig, anon in change.changes_made
-                )),
+                identifiers_found=len(
+                    {orig for change in result.changes for orig, anon in change.changes_made}
+                ),
             )
             report.file_statistics.append(fs)
 
@@ -306,7 +309,7 @@ def create_mapping_report(mapping_table: MappingTable) -> str:
 
 
 def create_summary_report(
-    file_results: List[FileTransformResult],
+    file_results: list[FileTransformResult],
     mapping_table: MappingTable,
 ) -> str:
     """

@@ -9,13 +9,11 @@ This module provides helper functions for:
 """
 
 import re
-from typing import Tuple
 
 from cobol_anonymizer.exceptions import (
     IdentifierLengthError,
     InvalidIdentifierError,
 )
-
 
 # COBOL identifier constraints
 MAX_IDENTIFIER_LENGTH = 30
@@ -27,7 +25,7 @@ MIN_IDENTIFIER_LENGTH = 1
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9]$|^[A-Za-z]$")
 
 
-def validate_identifier(name: str, raise_on_error: bool = True) -> Tuple[bool, str]:
+def validate_identifier(name: str, raise_on_error: bool = True) -> tuple[bool, str]:
     """Validate that a name is a valid COBOL identifier.
 
     COBOL identifiers must:

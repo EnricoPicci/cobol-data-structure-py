@@ -12,27 +12,21 @@ This module handles:
 """
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
+from pathlib import Path
+from typing import Optional
 
 from cobol_anonymizer.cobol.column_handler import (
-    MAX_LINE_LENGTH,
     CODE_END,
-    parse_line,
+    MAX_LINE_LENGTH,
 )
-from cobol_anonymizer.cobol.copy_resolver import find_copy_statements, CopyResolver
+from cobol_anonymizer.cobol.copy_resolver import find_copy_statements
 from cobol_anonymizer.core.mapper import MappingTable
-from cobol_anonymizer.exceptions import (
-    ColumnOverflowError,
-    IdentifierLengthError,
-    MappingError,
-    CopyNotFoundError,
-)
 
 
 class ValidationSeverity(Enum):
     """Severity levels for validation issues."""
+
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -41,6 +35,7 @@ class ValidationSeverity(Enum):
 @dataclass
 class ValidationIssue:
     """A single validation issue."""
+
     severity: ValidationSeverity
     message: str
     file_path: Optional[Path] = None
@@ -63,55 +58,49 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """Result of validation."""
-    issues: List[ValidationIssue] = field(default_factory=list)
+
+    issues: list[ValidationIssue] = field(default_factory=list)
     files_validated: int = 0
     lines_validated: int = 0
 
     @property
     def is_valid(self) -> bool:
         """Check if validation passed (no errors)."""
-        return not any(
-            issue.severity == ValidationSeverity.ERROR for issue in self.issues
-        )
+        return not any(issue.severity == ValidationSeverity.ERROR for issue in self.issues)
 
     @property
-    def errors(self) -> List[ValidationIssue]:
+    def errors(self) -> list[ValidationIssue]:
         """Get all error issues."""
         return [i for i in self.issues if i.severity == ValidationSeverity.ERROR]
 
     @property
-    def warnings(self) -> List[ValidationIssue]:
+    def warnings(self) -> list[ValidationIssue]:
         """Get all warning issues."""
         return [i for i in self.issues if i.severity == ValidationSeverity.WARNING]
 
     def add_error(self, message: str, **kwargs) -> None:
         """Add an error issue."""
-        self.issues.append(ValidationIssue(
-            severity=ValidationSeverity.ERROR,
-            message=message,
-            **kwargs
-        ))
+        self.issues.append(
+            ValidationIssue(severity=ValidationSeverity.ERROR, message=message, **kwargs)
+        )
 
     def add_warning(self, message: str, **kwargs) -> None:
         """Add a warning issue."""
-        self.issues.append(ValidationIssue(
-            severity=ValidationSeverity.WARNING,
-            message=message,
-            **kwargs
-        ))
+        self.issues.append(
+            ValidationIssue(severity=ValidationSeverity.WARNING, message=message, **kwargs)
+        )
 
     def add_info(self, message: str, **kwargs) -> None:
         """Add an info issue."""
-        self.issues.append(ValidationIssue(
-            severity=ValidationSeverity.INFO,
-            message=message,
-            **kwargs
-        ))
+        self.issues.append(
+            ValidationIssue(severity=ValidationSeverity.INFO, message=message, **kwargs)
+        )
 
 
 @dataclass
 class ValidatorConfig:
     """Configuration for validator."""
+
     check_column_format: bool = True
     check_code_area: bool = True
     check_identifier_length: bool = True
@@ -167,7 +156,7 @@ class OutputValidator:
         try:
             content = file_path.read_text(encoding="latin-1")
             lines = content.splitlines()
-        except IOError as e:
+        except OSError as e:
             result.add_error(
                 f"Cannot read file: {e}",
                 file_path=file_path,
@@ -187,7 +176,7 @@ class OutputValidator:
 
         return result
 
-    def validate_files(self, files: List[Path]) -> ValidationResult:
+    def validate_files(self, files: list[Path]) -> ValidationResult:
         """
         Validate multiple files.
 
@@ -233,7 +222,7 @@ class OutputValidator:
     def _validate_column_format(
         self,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         result: ValidationResult,
     ) -> None:
         """Validate all lines are within column limits."""
@@ -248,7 +237,7 @@ class OutputValidator:
     def _validate_code_area(
         self,
         file_path: Path,
-        lines: List[str],
+        lines: list[str],
         result: ValidationResult,
     ) -> None:
         """Validate code area doesn't exceed column 72."""
@@ -257,19 +246,19 @@ class OutputValidator:
                 continue  # Line too short to have code area
 
             # Check if column 7 is a comment indicator
-            if line[6] == '*':
+            if line[6] == "*":
                 continue  # Comment lines can have anything
 
             # Check code area (columns 8-72)
             code_area = line[7:CODE_END]
             # Find where actual content ends (ignore trailing spaces)
-            content_end = len(code_area.rstrip())
+            len(code_area.rstrip())
 
             # This is a soft warning - some lines legitimately have trailing content
             if len(line) > CODE_END and line[CODE_END:].strip():
                 # There's content after column 72
                 result.add_warning(
-                    f"Content after column 72 (may be identification area)",
+                    "Content after column 72 (may be identification area)",
                     file_path=file_path,
                     line_number=i,
                     context=f"Extra: '{line[CODE_END:].strip()[:20]}'",
@@ -277,12 +266,12 @@ class OutputValidator:
 
     def _validate_copy_references(
         self,
-        files: List[Path],
+        files: list[Path],
         result: ValidationResult,
     ) -> None:
         """Validate all COPY statements reference existing files."""
         # Build list of available copybooks
-        available_copybooks: Set[str] = set()
+        available_copybooks: set[str] = set()
         for f in files:
             name = f.stem.upper()
             available_copybooks.add(name)
@@ -303,7 +292,7 @@ class OutputValidator:
                             line_number=stmt.line_number,
                             identifier=stmt.copybook_name,
                         )
-            except IOError:
+            except OSError:
                 continue
 
     def _validate_cross_file_consistency(self, result: ValidationResult) -> None:
@@ -315,7 +304,7 @@ class OutputValidator:
         mappings = self.mapping_table.get_all_mappings()
 
         # Check for duplicate anonymized names
-        anon_to_original: Dict[str, str] = {}
+        anon_to_original: dict[str, str] = {}
         for entry in mappings:
             if entry.anonymized_name in anon_to_original:
                 existing = anon_to_original[entry.anonymized_name]
@@ -332,7 +321,7 @@ class OutputValidator:
 def validate_identifier_lengths(
     mapping_table: MappingTable,
     max_length: int = 30,
-) -> List[ValidationIssue]:
+) -> list[ValidationIssue]:
     """
     Validate all anonymized identifiers are within length limits.
 
@@ -346,15 +335,17 @@ def validate_identifier_lengths(
     issues = []
     for entry in mapping_table.get_all_mappings():
         if len(entry.anonymized_name) > max_length:
-            issues.append(ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                message=f"Anonymized name '{entry.anonymized_name}' exceeds {max_length} chars",
-                identifier=entry.original_name,
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    message=f"Anonymized name '{entry.anonymized_name}' exceeds {max_length} chars",
+                    identifier=entry.original_name,
+                )
+            )
     return issues
 
 
-def validate_column_format(files: List[Path]) -> List[ValidationIssue]:
+def validate_column_format(files: list[Path]) -> list[ValidationIssue]:
     """
     Validate all files have proper column format.
 

@@ -9,15 +9,13 @@ This module handles:
 - Validating column boundaries before writing
 """
 
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 from cobol_anonymizer.cobol.column_handler import (
-    MAX_LINE_LENGTH,
     CODE_END,
-    validate_code_area,
+    MAX_LINE_LENGTH,
 )
 from cobol_anonymizer.exceptions import ColumnOverflowError
 
@@ -25,6 +23,7 @@ from cobol_anonymizer.exceptions import ColumnOverflowError
 @dataclass
 class WriteResult:
     """Result of writing a file."""
+
     source_path: Path
     output_path: Path
     original_name: str
@@ -40,6 +39,7 @@ class WriteResult:
 @dataclass
 class WriterConfig:
     """Configuration for output writer."""
+
     output_directory: Optional[Path] = None
     preserve_encoding: bool = True
     default_encoding: str = "latin-1"
@@ -67,7 +67,7 @@ def detect_encoding(file_path: Path) -> str:
 
     for encoding in encodings:
         try:
-            with open(file_path, "r", encoding=encoding) as f:
+            with open(file_path, encoding=encoding) as f:
                 f.read()
             return encoding
         except UnicodeDecodeError:
@@ -97,7 +97,7 @@ def detect_line_ending(file_path: Path, encoding: str = "latin-1") -> str:
             return "\r"  # Old Mac
         else:
             return "\n"  # Unix
-    except IOError:
+    except OSError:
         return "\n"
 
 
@@ -156,12 +156,12 @@ class OutputWriter:
             config: Writer configuration (uses defaults if not provided)
         """
         self.config = config or WriterConfig()
-        self._write_results: List[WriteResult] = []
+        self._write_results: list[WriteResult] = []
 
     def write_file(
         self,
         source_path: Path,
-        lines: List[str],
+        lines: list[str],
         anonymized_name: Optional[str] = None,
         output_directory: Optional[Path] = None,
     ) -> WriteResult:
@@ -237,16 +237,16 @@ class OutputWriter:
             result.success = False
             result.error_message = str(e)
             return result
-        except IOError as e:
+        except OSError as e:
             result.success = False
             result.error_message = f"IO error: {e}"
             return result
 
     def write_files(
         self,
-        files: Dict[Path, Tuple[List[str], Optional[str]]],
+        files: dict[Path, tuple[list[str], Optional[str]]],
         output_directory: Optional[Path] = None,
-    ) -> List[WriteResult]:
+    ) -> list[WriteResult]:
         """
         Write multiple anonymized files.
 
@@ -263,11 +263,11 @@ class OutputWriter:
             results.append(result)
         return results
 
-    def get_results(self) -> List[WriteResult]:
+    def get_results(self) -> list[WriteResult]:
         """Get all write results."""
         return list(self._write_results)
 
-    def get_statistics(self) -> Dict[str, int]:
+    def get_statistics(self) -> dict[str, int]:
         """Get writing statistics."""
         successful = [r for r in self._write_results if r.success]
         failed = [r for r in self._write_results if not r.success]
@@ -282,7 +282,7 @@ class OutputWriter:
 
 def write_anonymized_file(
     source_path: Path,
-    lines: List[str],
+    lines: list[str],
     output_path: Path,
     encoding: str = "latin-1",
     line_ending: str = "\n",

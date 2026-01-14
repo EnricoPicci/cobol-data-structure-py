@@ -6,18 +6,17 @@ This module tests the naming scheme strategies for identifier anonymization.
 
 import pytest
 
-from cobol_anonymizer.generators.naming_schemes import (
-    NamingScheme,
-    get_naming_strategy,
-    BaseNamingStrategy,
-    NumericNamingStrategy,
-    AnimalNamingStrategy,
-    FoodNamingStrategy,
-    FantasyNamingStrategy,
-    CorporateNamingStrategy,
-    NAME_PREFIXES,
-)
 from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.generators.naming_schemes import (
+    NAME_PREFIXES,
+    AnimalNamingStrategy,
+    CorporateNamingStrategy,
+    FantasyNamingStrategy,
+    FoodNamingStrategy,
+    NamingScheme,
+    NumericNamingStrategy,
+    get_naming_strategy,
+)
 
 
 class TestNamingSchemeEnum:
@@ -275,8 +274,9 @@ class TestCOBOLIdentifierValidity:
             strategy = get_naming_strategy(scheme)
             name = strategy.generate_name("TEST", IdentifierType.DATA_NAME, 1, 30)
             for char in name:
-                assert char.isalnum() or char == "-", \
-                    f"Scheme {scheme}: {name} contains invalid char '{char}'"
+                assert (
+                    char.isalnum() or char == "-"
+                ), f"Scheme {scheme}: {name} contains invalid char '{char}'"
 
     def test_no_double_hyphens(self):
         """Generated names never contain double hyphens."""

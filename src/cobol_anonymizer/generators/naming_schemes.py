@@ -13,14 +13,12 @@ Available schemes:
 import hashlib
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Type
 
 from cobol_anonymizer.core.classifier import IdentifierType
 from cobol_anonymizer.exceptions import IdentifierLengthError
 
-
 # Type-specific prefixes for numeric naming (used by NumericNamingStrategy)
-NAME_PREFIXES: Dict[IdentifierType, str] = {
+NAME_PREFIXES: dict[IdentifierType, str] = {
     IdentifierType.PROGRAM_NAME: "PG",
     IdentifierType.COPYBOOK_NAME: "CP",
     IdentifierType.SECTION_NAME: "SC",
@@ -70,6 +68,7 @@ def format_numeric_name(prefix: str, counter: int, target_length: int) -> str:
 
 class NamingScheme(str, Enum):
     """Available naming schemes for identifier anonymization."""
+
     NUMERIC = "numeric"
     ANIMALS = "animals"
     FOOD = "food"
@@ -82,11 +81,7 @@ class BaseNamingStrategy(ABC):
 
     @abstractmethod
     def generate_name(
-        self,
-        original_name: str,
-        id_type: IdentifierType,
-        counter: int,
-        target_length: int
+        self, original_name: str, id_type: IdentifierType, counter: int, target_length: int
     ) -> str:
         """
         Generate an anonymized name.
@@ -116,11 +111,7 @@ class NumericNamingStrategy(BaseNamingStrategy):
     """
 
     def generate_name(
-        self,
-        original_name: str,
-        id_type: IdentifierType,
-        counter: int,
-        target_length: int
+        self, original_name: str, id_type: IdentifierType, counter: int, target_length: int
     ) -> str:
         """Generate a numeric name like D00000001."""
         prefix = get_prefix_for_type(id_type)
@@ -138,18 +129,14 @@ class WordBasedNamingStrategy(BaseNamingStrategy):
     Uses deterministic hashing to select adjective/noun from word lists.
     """
 
-    ADJECTIVES: List[str] = []
-    NOUNS: List[str] = []
+    ADJECTIVES: list[str] = []
+    NOUNS: list[str] = []
 
     # Minimum length for word-based names: "A-B-1" = 5 chars
     MIN_WORD_BASED_LENGTH = 5
 
     def generate_name(
-        self,
-        original_name: str,
-        id_type: IdentifierType,
-        counter: int,
-        target_length: int
+        self, original_name: str, id_type: IdentifierType, counter: int, target_length: int
     ) -> str:
         """Generate a word-based name like FLUFFY-LLAMA-1."""
         # Check minimum length constraint
@@ -176,10 +163,7 @@ class WordBasedNamingStrategy(BaseNamingStrategy):
         return base_name
 
     def _fallback_to_numeric(
-        self,
-        id_type: IdentifierType,
-        counter: int,
-        target_length: int
+        self, id_type: IdentifierType, counter: int, target_length: int
     ) -> str:
         """Fall back to numeric scheme when word-based cannot fit."""
         prefix = get_prefix_for_type(id_type)
@@ -192,15 +176,9 @@ class WordBasedNamingStrategy(BaseNamingStrategy):
         Uses MD5 for stability - DO NOT CHANGE without migration plan.
         """
         hash_bytes = hashlib.md5(name.upper().encode()).digest()
-        return int.from_bytes(hash_bytes[:8], byteorder='big')
+        return int.from_bytes(hash_bytes[:8], byteorder="big")
 
-    def _truncate_name(
-        self,
-        adj: str,
-        noun: str,
-        counter: int,
-        max_len: int
-    ) -> str:
+    def _truncate_name(self, adj: str, noun: str, counter: int, max_len: int) -> str:
         """
         Truncate name to fit within max length.
 
@@ -217,7 +195,7 @@ class WordBasedNamingStrategy(BaseNamingStrategy):
             raise IdentifierLengthError(
                 f"Cannot generate word-based name: max_len={max_len} "
                 f"< min_required={min_required} for counter={counter}",
-                max_len
+                max_len,
             )
 
         # Reserve space for: ADJ- + NOUN- + counter
@@ -230,8 +208,7 @@ class WordBasedNamingStrategy(BaseNamingStrategy):
         # Final validation: ensure no double hyphens were created
         if "--" in result:
             raise IdentifierLengthError(
-                f"Truncation produced invalid name with double hyphen: {result}",
-                max_len
+                f"Truncation produced invalid name with double hyphen: {result}", max_len
             )
 
         return result
@@ -245,15 +222,39 @@ class AnimalNamingStrategy(WordBasedNamingStrategy):
     """Animal-themed naming: FLUFFY-LLAMA-1, GRUMPY-PENGUIN-2"""
 
     ADJECTIVES = [
-        "FLUFFY", "GRUMPY", "SNEAKY", "WOBBLY", "DIZZY",
-        "SLEEPY", "JUMPY", "FUZZY", "CHUNKY", "SPEEDY",
-        "MIGHTY", "CLEVER", "SWIFT", "BRAVE", "SILLY"
+        "FLUFFY",
+        "GRUMPY",
+        "SNEAKY",
+        "WOBBLY",
+        "DIZZY",
+        "SLEEPY",
+        "JUMPY",
+        "FUZZY",
+        "CHUNKY",
+        "SPEEDY",
+        "MIGHTY",
+        "CLEVER",
+        "SWIFT",
+        "BRAVE",
+        "SILLY",
     ]
 
     NOUNS = [
-        "LLAMA", "PENGUIN", "WOMBAT", "PLATYPUS", "BADGER",
-        "OTTER", "SLOTH", "KOALA", "LEMUR", "PANDA",
-        "FERRET", "MARMOT", "BEAVER", "FALCON", "TOUCAN"
+        "LLAMA",
+        "PENGUIN",
+        "WOMBAT",
+        "PLATYPUS",
+        "BADGER",
+        "OTTER",
+        "SLOTH",
+        "KOALA",
+        "LEMUR",
+        "PANDA",
+        "FERRET",
+        "MARMOT",
+        "BEAVER",
+        "FALCON",
+        "TOUCAN",
     ]
 
     def get_scheme(self) -> NamingScheme:
@@ -264,15 +265,39 @@ class FoodNamingStrategy(WordBasedNamingStrategy):
     """Food-themed naming: SPICY-TACO-1, CRISPY-WAFFLE-2"""
 
     ADJECTIVES = [
-        "SPICY", "CRISPY", "SOGGY", "CHUNKY", "TANGY",
-        "ZESTY", "GOOEY", "CRUNCHY", "SAVORY", "SIZZLY",
-        "SMOKY", "CHEESY", "FRESH", "TOASTY", "SAUCY"
+        "SPICY",
+        "CRISPY",
+        "SOGGY",
+        "CHUNKY",
+        "TANGY",
+        "ZESTY",
+        "GOOEY",
+        "CRUNCHY",
+        "SAVORY",
+        "SIZZLY",
+        "SMOKY",
+        "CHEESY",
+        "FRESH",
+        "TOASTY",
+        "SAUCY",
     ]
 
     NOUNS = [
-        "TACO", "WAFFLE", "NOODLE", "PICKLE", "MUFFIN",
-        "PRETZEL", "BURRITO", "DUMPLING", "PANCAKE", "NACHO",
-        "BAGEL", "DONUT", "BISCUIT", "CRUMPET", "CHURRO"
+        "TACO",
+        "WAFFLE",
+        "NOODLE",
+        "PICKLE",
+        "MUFFIN",
+        "PRETZEL",
+        "BURRITO",
+        "DUMPLING",
+        "PANCAKE",
+        "NACHO",
+        "BAGEL",
+        "DONUT",
+        "BISCUIT",
+        "CRUMPET",
+        "CHURRO",
     ]
 
     def get_scheme(self) -> NamingScheme:
@@ -283,15 +308,39 @@ class FantasyNamingStrategy(WordBasedNamingStrategy):
     """Fantasy-themed naming: SNEAKY-DRAGON-1, ANCIENT-GOBLIN-2"""
 
     ADJECTIVES = [
-        "SNEAKY", "ANCIENT", "MIGHTY", "SLEEPY", "GRUMPY",
-        "MYSTIC", "SHADOW", "FIERCE", "CLEVER", "NOBLE",
-        "ARCANE", "GOLDEN", "SILVER", "WILD", "COSMIC"
+        "SNEAKY",
+        "ANCIENT",
+        "MIGHTY",
+        "SLEEPY",
+        "GRUMPY",
+        "MYSTIC",
+        "SHADOW",
+        "FIERCE",
+        "CLEVER",
+        "NOBLE",
+        "ARCANE",
+        "GOLDEN",
+        "SILVER",
+        "WILD",
+        "COSMIC",
     ]
 
     NOUNS = [
-        "DRAGON", "GOBLIN", "UNICORN", "TROLL", "PHOENIX",
-        "WIZARD", "SPHINX", "GRIFFIN", "OGRE", "FAIRY",
-        "KRAKEN", "HYDRA", "CENTAUR", "CYCLOPS", "CHIMERA"
+        "DRAGON",
+        "GOBLIN",
+        "UNICORN",
+        "TROLL",
+        "PHOENIX",
+        "WIZARD",
+        "SPHINX",
+        "GRIFFIN",
+        "OGRE",
+        "FAIRY",
+        "KRAKEN",
+        "HYDRA",
+        "CENTAUR",
+        "CYCLOPS",
+        "CHIMERA",
     ]
 
     def get_scheme(self) -> NamingScheme:
@@ -302,15 +351,39 @@ class CorporateNamingStrategy(WordBasedNamingStrategy):
     """Corporate buzzword naming: AGILE-SYNERGY-1, LEAN-PARADIGM-2"""
 
     ADJECTIVES = [
-        "AGILE", "SYNERGY", "PIVOT", "DISRUPT", "LEVERAGE",
-        "SCALABLE", "ROBUST", "DYNAMIC", "HOLISTIC", "LEAN",
-        "PROACTIVE", "NIMBLE", "OPTIMAL", "ALIGNED", "ELASTIC"
+        "AGILE",
+        "SYNERGY",
+        "PIVOT",
+        "DISRUPT",
+        "LEVERAGE",
+        "SCALABLE",
+        "ROBUST",
+        "DYNAMIC",
+        "HOLISTIC",
+        "LEAN",
+        "PROACTIVE",
+        "NIMBLE",
+        "OPTIMAL",
+        "ALIGNED",
+        "ELASTIC",
     ]
 
     NOUNS = [
-        "PARADIGM", "BANDWIDTH", "SILO", "ROADMAP", "STAKEHOLDER",
-        "TOUCHPOINT", "PIPELINE", "MINDSHARE", "VERTICAL", "METRICS",
-        "SYNERGY", "ECOSYSTEM", "PLATFORM", "FRAMEWORK", "CHANNEL"
+        "PARADIGM",
+        "BANDWIDTH",
+        "SILO",
+        "ROADMAP",
+        "STAKEHOLDER",
+        "TOUCHPOINT",
+        "PIPELINE",
+        "MINDSHARE",
+        "VERTICAL",
+        "METRICS",
+        "SYNERGY",
+        "ECOSYSTEM",
+        "PLATFORM",
+        "FRAMEWORK",
+        "CHANNEL",
     ]
 
     def get_scheme(self) -> NamingScheme:
@@ -318,7 +391,7 @@ class CorporateNamingStrategy(WordBasedNamingStrategy):
 
 
 # Strategy registry
-_STRATEGY_REGISTRY: Dict[NamingScheme, Type[BaseNamingStrategy]] = {
+_STRATEGY_REGISTRY: dict[NamingScheme, type[BaseNamingStrategy]] = {
     NamingScheme.NUMERIC: NumericNamingStrategy,
     NamingScheme.ANIMALS: AnimalNamingStrategy,
     NamingScheme.FOOD: FoodNamingStrategy,

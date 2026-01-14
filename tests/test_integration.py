@@ -4,21 +4,16 @@ Tests for Phase 11: Integration Testing.
 Integration tests for the full anonymization pipeline.
 """
 
-import pytest
-import tempfile
 import time
-from pathlib import Path
+
+import pytest
 
 from cobol_anonymizer.config import Config
 from cobol_anonymizer.main import (
     AnonymizationPipeline,
     anonymize_directory,
-    validate_directory,
 )
-from cobol_anonymizer.core.anonymizer import Anonymizer
-from cobol_anonymizer.core.mapper import MappingTable
 from cobol_anonymizer.output.validator import OutputValidator
-
 
 # Sample COBOL files for testing
 SAMPLE_MAIN_PROGRAM = """       IDENTIFICATION DIVISION.
@@ -198,18 +193,22 @@ class TestFullPipeline:
 
         # Create two files sharing an identifier
         file1 = input_dir / "PROG1.cob"
-        file1.write_text("""       01 SHARED-FIELD PIC X(10).
+        file1.write_text(
+            """       01 SHARED-FIELD PIC X(10).
        PROCEDURE DIVISION.
        MAIN-PARA.
            MOVE SPACES TO SHARED-FIELD.
-""")
+"""
+        )
 
         file2 = input_dir / "PROG2.cob"
-        file2.write_text("""       01 SHARED-FIELD PIC X(10).
+        file2.write_text(
+            """       01 SHARED-FIELD PIC X(10).
        PROCEDURE DIVISION.
        MAIN-PARA.
            INITIALIZE SHARED-FIELD.
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -337,14 +336,17 @@ class TestCopyDependencies:
 
         # Copybook that includes COPY003
         copy2 = input_dir / "COPY002.cpy"
-        copy2.write_text("""       01 LEVEL2-RECORD.
+        copy2.write_text(
+            """       01 LEVEL2-RECORD.
           05 LEVEL2-FIELD PIC X.
        COPY COPY003.
-""")
+"""
+        )
 
         # Program that includes COPY002
         prog = input_dir / "MAINPROG.cob"
-        prog.write_text("""       IDENTIFICATION DIVISION.
+        prog.write_text(
+            """       IDENTIFICATION DIVISION.
        PROGRAM-ID. MAINPROG.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
@@ -352,7 +354,8 @@ class TestCopyDependencies:
        PROCEDURE DIVISION.
        MAIN-PARA.
            STOP RUN.
-""")
+"""
+        )
 
         return input_dir
 
@@ -380,13 +383,15 @@ class TestPICPreservation:
         input_dir.mkdir()
 
         test_file = input_dir / "PICTEST.cpy"
-        test_file.write_text("""       01 WS-RECORD.
+        test_file.write_text(
+            """       01 WS-RECORD.
           05 WS-NUMERIC    PIC 9(10).
           05 WS-ALPHA      PIC X(30).
           05 WS-DECIMAL    PIC 9(5)V99.
           05 WS-SIGNED     PIC S9(9) COMP-3.
           05 WS-EDITED     PIC ZZZ,ZZ9.99.
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -411,8 +416,9 @@ class TestPICPreservation:
         for file_result in result.file_results:
             full_output = "".join(c.transformed_line for c in file_result.changes)
             for pattern in pic_patterns:
-                assert pattern in full_output or pattern.lower() in full_output.lower(), \
-                    f"PIC pattern '{pattern}' not found in output"
+                assert (
+                    pattern in full_output or pattern.lower() in full_output.lower()
+                ), f"PIC pattern '{pattern}' not found in output"
 
 
 class TestValidation:
@@ -453,13 +459,15 @@ class TestCommentHandling:
         input_dir.mkdir()
 
         test_file = input_dir / "COMMENTS.cob"
-        test_file.write_text("""      ******************************************
+        test_file.write_text(
+            """      ******************************************
       * GESTIONE POLIZZA - MANAGEMENT MODULE
       * MODIFIED BY MASON 15/03/2024
       * CRQ000002478171 - FIX CALCOLO
       ******************************************
        01 WS-FIELD PIC X.
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -535,10 +543,12 @@ class TestEdgeCases:
         input_dir.mkdir()
 
         comment_file = input_dir / "COMMENTS.cob"
-        comment_file.write_text("""      * LINE 1
+        comment_file.write_text(
+            """      * LINE 1
       * LINE 2
       * LINE 3
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -579,10 +589,12 @@ class TestCommentAnonymization:
         input_dir.mkdir()
 
         test_file = input_dir / "TESTCOMM.cob"
-        test_file.write_text("""      * SISTEMA PORTAFOGLIO RAMI DANNI
+        test_file.write_text(
+            """      * SISTEMA PORTAFOGLIO RAMI DANNI
       * AGGIORNAMENTO PARTE AMMINISTRATIVA
        01 WS-FIELD PIC X.
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -608,11 +620,13 @@ class TestCommentAnonymization:
         input_dir.mkdir()
 
         test_file = input_dir / "DIVIDERS.cob"
-        test_file.write_text("""      ******************************************
+        test_file.write_text(
+            """      ******************************************
       * ACTUAL COMMENT TEXT HERE
       *------------------------------------------
        01 WS-FIELD PIC X.
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -660,7 +674,7 @@ class TestCommentAnonymization:
 
         # Count original comment lines
         original_comment_lines = sum(
-            1 for line in original_content.splitlines() if len(line) >= 7 and line[6] == '*'
+            1 for line in original_content.splitlines() if len(line) >= 7 and line[6] == "*"
         )
 
         # Count output comment lines
@@ -674,13 +688,15 @@ class TestCommentAnonymization:
         input_dir.mkdir()
 
         test_file = input_dir / "BOXBORDER.cob"
-        test_file.write_text("""      ******************************************
+        test_file.write_text(
+            """      ******************************************
       *                                        *
       *  SOME COMMENT TEXT HERE                *
       *                                        *
       ******************************************
        01 WS-FIELD PIC X.
-""")
+"""
+        )
 
         output_dir = tmp_path / "output"
 
@@ -699,7 +715,7 @@ class TestCommentAnonymization:
                 if change.is_comment:
                     line = change.transformed_line
                     # Check for lines that are mostly whitespace with asterisks at edges
-                    if line.strip().endswith('*') and '   *' in line:
+                    if line.strip().endswith("*") and "   *" in line:
                         box_border_count += 1
 
         # We should have box borders preserved

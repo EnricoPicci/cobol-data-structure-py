@@ -4,28 +4,14 @@ Tests for Phase 9: Output Writer and Validator.
 Tests for writing anonymized files and validation.
 """
 
-import pytest
 from pathlib import Path
 
-from cobol_anonymizer.output.writer import (
-    OutputWriter,
-    WriteResult,
-    WriterConfig,
-    detect_encoding,
-    detect_line_ending,
-    validate_line_columns,
-    write_anonymized_file,
-)
-from cobol_anonymizer.output.validator import (
-    OutputValidator,
-    ValidatorConfig,
-    ValidationResult,
-    ValidationSeverity,
-    ValidationIssue,
-    validate_column_format,
-    validate_identifier_lengths,
-    validate_mapping_table,
-)
+import pytest
+
+from cobol_anonymizer.core.anonymizer import FileTransformResult, TransformResult
+from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.core.mapper import MappingTable
+from cobol_anonymizer.exceptions import ColumnOverflowError
 from cobol_anonymizer.output.report import (
     AnonymizationReport,
     FileStatistics,
@@ -33,10 +19,19 @@ from cobol_anonymizer.output.report import (
     create_mapping_report,
     create_summary_report,
 )
-from cobol_anonymizer.core.mapper import MappingTable
-from cobol_anonymizer.core.classifier import IdentifierType
-from cobol_anonymizer.core.anonymizer import FileTransformResult, TransformResult
-from cobol_anonymizer.exceptions import ColumnOverflowError
+from cobol_anonymizer.output.validator import (
+    OutputValidator,
+    ValidationResult,
+    validate_mapping_table,
+)
+from cobol_anonymizer.output.writer import (
+    OutputWriter,
+    WriterConfig,
+    detect_encoding,
+    detect_line_ending,
+    validate_line_columns,
+    write_anonymized_file,
+)
 
 
 class TestDetectEncoding:
@@ -314,6 +309,7 @@ class TestValidateMappingTable:
         table = MappingTable()
         # Manually add an invalid entry
         from cobol_anonymizer.core.mapper import MappingEntry
+
         entry = MappingEntry(
             original_name="SHORT",
             anonymized_name="A" * 35,
@@ -329,6 +325,7 @@ class TestValidateMappingTable:
         """Detect identifier with leading hyphen."""
         table = MappingTable()
         from cobol_anonymizer.core.mapper import MappingEntry
+
         entry = MappingEntry(
             original_name="FIELD",
             anonymized_name="-INVALID",
@@ -343,6 +340,7 @@ class TestValidateMappingTable:
         """Detect identifier with trailing hyphen."""
         table = MappingTable()
         from cobol_anonymizer.core.mapper import MappingEntry
+
         entry = MappingEntry(
             original_name="FIELD",
             anonymized_name="INVALID-",

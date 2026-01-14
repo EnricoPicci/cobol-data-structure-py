@@ -18,34 +18,35 @@ identifier types based on their location in the source.
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import List, Optional, Set, Dict, Tuple
+from typing import Optional
 
+from cobol_anonymizer.cobol.pic_parser import has_external_clause
+from cobol_anonymizer.cobol.reserved_words import is_reserved_word, is_system_identifier
 from cobol_anonymizer.core.tokenizer import (
     Token,
     TokenType,
     tokenize_line,
-    get_identifiers,
 )
-from cobol_anonymizer.cobol.pic_parser import has_external_clause
-from cobol_anonymizer.cobol.reserved_words import is_reserved_word, is_system_identifier
 
 
 class IdentifierType(Enum):
     """Types of identifiers in COBOL."""
-    PROGRAM_NAME = auto()      # PROGRAM-ID
-    COPYBOOK_NAME = auto()     # COPY statement
-    SECTION_NAME = auto()      # PROCEDURE DIVISION section
-    PARAGRAPH_NAME = auto()    # PROCEDURE DIVISION paragraph
-    DATA_NAME = auto()         # Data item (01-49, 66, 77)
-    CONDITION_NAME = auto()    # 88-level condition
-    FILE_NAME = auto()         # FD/SD file
-    INDEX_NAME = auto()        # INDEXED BY
-    EXTERNAL_NAME = auto()     # EXTERNAL data items (do not anonymize)
-    UNKNOWN = auto()           # Cannot determine type
+
+    PROGRAM_NAME = auto()  # PROGRAM-ID
+    COPYBOOK_NAME = auto()  # COPY statement
+    SECTION_NAME = auto()  # PROCEDURE DIVISION section
+    PARAGRAPH_NAME = auto()  # PROCEDURE DIVISION paragraph
+    DATA_NAME = auto()  # Data item (01-49, 66, 77)
+    CONDITION_NAME = auto()  # 88-level condition
+    FILE_NAME = auto()  # FD/SD file
+    INDEX_NAME = auto()  # INDEXED BY
+    EXTERNAL_NAME = auto()  # EXTERNAL data items (do not anonymize)
+    UNKNOWN = auto()  # Cannot determine type
 
 
 class Division(Enum):
     """COBOL division types."""
+
     IDENTIFICATION = "IDENTIFICATION"
     ENVIRONMENT = "ENVIRONMENT"
     DATA = "DATA"
@@ -55,6 +56,7 @@ class Division(Enum):
 
 class DataSection(Enum):
     """COBOL data division sections."""
+
     FILE = "FILE"
     WORKING_STORAGE = "WORKING-STORAGE"
     LOCAL_STORAGE = "LOCAL-STORAGE"
@@ -79,6 +81,7 @@ class ClassifiedIdentifier:
         level_number: Level number for data items
         parent_name: Name of parent group item
     """
+
     name: str
     type: IdentifierType
     line_number: int
@@ -96,12 +99,13 @@ class FileContext:
 
     This context is essential for proper identifier classification.
     """
+
     filename: str
     current_division: Division = Division.NONE
     current_section: DataSection = DataSection.NONE
     in_procedure_division: bool = False
     current_level: int = 0
-    level_stack: List[Tuple[int, str]] = field(default_factory=list)
+    level_stack: list[tuple[int, str]] = field(default_factory=list)
     is_external_block: bool = False
     last_paragraph: Optional[str] = None
     last_section: Optional[str] = None
@@ -113,7 +117,7 @@ class FileContext:
         """Enter a new division."""
         self.current_division = division
         self.current_section = DataSection.NONE
-        self.in_procedure_division = (division == Division.PROCEDURE)
+        self.in_procedure_division = division == Division.PROCEDURE
         if division != Division.DATA:
             self.level_stack.clear()
             self.is_external_block = False
@@ -157,10 +161,10 @@ class IdentifierClassifier:
             filename: Name of the file being processed
         """
         self.context = FileContext(filename=filename)
-        self.identifiers: List[ClassifiedIdentifier] = []
-        self.seen_definitions: Set[str] = set()
+        self.identifiers: list[ClassifiedIdentifier] = []
+        self.seen_definitions: set[str] = set()
 
-    def _get_first_non_whitespace(self, tokens: List[Token]) -> Optional[Token]:
+    def _get_first_non_whitespace(self, tokens: list[Token]) -> Optional[Token]:
         """Get the first non-whitespace token from a token list."""
         for token in tokens:
             if token.type != TokenType.WHITESPACE:
@@ -169,9 +173,9 @@ class IdentifierClassifier:
 
     def _find_token_after_keyword(
         self,
-        tokens: List[Token],
-        keywords: Set[str],
-        expected_types: Optional[Set[TokenType]] = None,
+        tokens: list[Token],
+        keywords: set[str],
+        expected_types: Optional[set[TokenType]] = None,
         substring_match: bool = False,
     ) -> Optional[Token]:
         """
@@ -216,7 +220,7 @@ class IdentifierClassifier:
         line: str,
         line_number: int,
         is_comment: bool = False,
-    ) -> List[ClassifiedIdentifier]:
+    ) -> list[ClassifiedIdentifier]:
         """
         Classify identifiers in a single line.
 
@@ -308,20 +312,20 @@ class IdentifierClassifier:
 
     def _is_copy_statement(self, upper_line: str) -> bool:
         """Check if line is a COPY statement."""
-        return bool(re.search(r'\bCOPY\s+', upper_line))
+        return bool(re.search(r"\bCOPY\s+", upper_line))
 
     def _is_fd_sd_declaration(self, upper_line: str) -> bool:
         """Check if line is an FD or SD declaration."""
-        return bool(re.search(r'^\s*(FD|SD)\s+', upper_line))
+        return bool(re.search(r"^\s*(FD|SD)\s+", upper_line))
 
-    def _is_section_header(self, tokens: List[Token], upper_line: str) -> bool:
+    def _is_section_header(self, tokens: list[Token], upper_line: str) -> bool:
         """Check if line is a section header in PROCEDURE DIVISION."""
         if not self.context.in_procedure_division:
             return False
         # Section headers: identifier SECTION.
-        return bool(re.search(r'\bSECTION\s*\.', upper_line))
+        return bool(re.search(r"\bSECTION\s*\.", upper_line))
 
-    def _is_paragraph_definition(self, tokens: List[Token], upper_line: str) -> bool:
+    def _is_paragraph_definition(self, tokens: list[Token], upper_line: str) -> bool:
         """Check if line is a paragraph definition."""
         if not self.context.in_procedure_division:
             return False
@@ -337,19 +341,19 @@ class IdentifierClassifier:
                 continue
             if token.type == TokenType.IDENTIFIER:
                 # Check if line ends with period and has no other significant content
-                remaining = stripped[len(token.value):].strip()
+                remaining = stripped[len(token.value) :].strip()
                 return remaining == "." or remaining == ""
             return False
         return False
 
-    def _is_data_definition(self, tokens: List[Token]) -> bool:
+    def _is_data_definition(self, tokens: list[Token]) -> bool:
         """Check if line is a data definition."""
         first_token = self._get_first_non_whitespace(tokens)
         return first_token is not None and first_token.type == TokenType.LEVEL_NUMBER
 
     def _classify_program_id(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify PROGRAM-ID identifier."""
@@ -368,7 +372,7 @@ class IdentifierClassifier:
 
     def _classify_copy_statement(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify COPY statement copybook name."""
@@ -385,7 +389,7 @@ class IdentifierClassifier:
 
     def _classify_fd_declaration(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify FD/SD file name."""
@@ -406,7 +410,7 @@ class IdentifierClassifier:
 
     def _classify_section_header(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify SECTION name."""
@@ -425,7 +429,7 @@ class IdentifierClassifier:
 
     def _classify_paragraph(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify paragraph name."""
@@ -444,10 +448,10 @@ class IdentifierClassifier:
 
     def _classify_data_definition(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
         is_external: bool = False,
-    ) -> List[ClassifiedIdentifier]:
+    ) -> list[ClassifiedIdentifier]:
         """Classify data definition identifiers."""
         classified = []
 
@@ -477,27 +481,31 @@ class IdentifierClassifier:
                         self.context.push_level(level_number, data_name)
 
                     self.seen_definitions.add(data_name.upper())
-                    classified.append(ClassifiedIdentifier(
-                        name=data_name,
-                        type=id_type,
-                        line_number=line_number,
-                        context=f"Level {level_number} data item",
-                        is_definition=True,
-                        is_external=is_external,
-                        level_number=level_number,
-                        parent_name=self.context.get_parent_name(),
-                    ))
+                    classified.append(
+                        ClassifiedIdentifier(
+                            name=data_name,
+                            type=id_type,
+                            line_number=line_number,
+                            context=f"Level {level_number} data item",
+                            is_definition=True,
+                            is_external=is_external,
+                            level_number=level_number,
+                            parent_name=self.context.get_parent_name(),
+                        )
+                    )
 
                 elif in_indexed_by:
                     # Index name
                     self.seen_definitions.add(token.value.upper())
-                    classified.append(ClassifiedIdentifier(
-                        name=token.value,
-                        type=IdentifierType.INDEX_NAME,
-                        line_number=line_number,
-                        context="INDEXED BY",
-                        is_definition=True,
-                    ))
+                    classified.append(
+                        ClassifiedIdentifier(
+                            name=token.value,
+                            type=IdentifierType.INDEX_NAME,
+                            line_number=line_number,
+                            context="INDEXED BY",
+                            is_definition=True,
+                        )
+                    )
 
             elif token.type == TokenType.RESERVED:
                 if token.value.upper() == "INDEXED":
@@ -513,9 +521,9 @@ class IdentifierClassifier:
 
     def _classify_references(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         line_number: int,
-    ) -> List[ClassifiedIdentifier]:
+    ) -> list[ClassifiedIdentifier]:
         """Classify identifier references in procedural code."""
         classified = []
 
@@ -533,38 +541,42 @@ class IdentifierClassifier:
                 else:
                     id_type = IdentifierType.UNKNOWN
 
-                classified.append(ClassifiedIdentifier(
-                    name=token.value,
-                    type=id_type,
-                    line_number=line_number,
-                    context="Reference",
-                    is_definition=False,
-                ))
+                classified.append(
+                    ClassifiedIdentifier(
+                        name=token.value,
+                        type=id_type,
+                        line_number=line_number,
+                        context="Reference",
+                        is_definition=False,
+                    )
+                )
 
         return classified
 
-    def get_all_identifiers(self) -> List[ClassifiedIdentifier]:
+    def get_all_identifiers(self) -> list[ClassifiedIdentifier]:
         """Get all classified identifiers."""
         return self.identifiers
 
-    def get_definitions(self) -> List[ClassifiedIdentifier]:
+    def get_definitions(self) -> list[ClassifiedIdentifier]:
         """Get only definition occurrences."""
         return [i for i in self.identifiers if i.is_definition]
 
-    def get_external_identifiers(self) -> List[ClassifiedIdentifier]:
+    def get_external_identifiers(self) -> list[ClassifiedIdentifier]:
         """Get identifiers marked as EXTERNAL."""
-        return [i for i in self.identifiers if i.is_external or i.type == IdentifierType.EXTERNAL_NAME]
+        return [
+            i for i in self.identifiers if i.is_external or i.type == IdentifierType.EXTERNAL_NAME
+        ]
 
-    def get_identifiers_by_type(self, id_type: IdentifierType) -> List[ClassifiedIdentifier]:
+    def get_identifiers_by_type(self, id_type: IdentifierType) -> list[ClassifiedIdentifier]:
         """Get identifiers of a specific type."""
         return [i for i in self.identifiers if i.type == id_type]
 
 
 def classify_cobol_file(
-    lines: List[str],
+    lines: list[str],
     filename: str,
-    comment_indicators: Set[str] = None,
-) -> List[ClassifiedIdentifier]:
+    comment_indicators: set[str] = None,
+) -> list[ClassifiedIdentifier]:
     """
     Classify all identifiers in a COBOL file.
 

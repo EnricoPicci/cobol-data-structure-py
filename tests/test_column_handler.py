@@ -9,16 +9,15 @@ import pytest
 from cobol_anonymizer.cobol.column_handler import (
     COBOLLine,
     IndicatorType,
-    CHANGE_TAGS,
     detect_change_tag,
+    extract_line_ending,
+    get_code_start_column,
+    is_area_a_content,
+    parse_file_line,
     parse_line,
     reconstruct_line,
     reconstruct_line_with_ending,
     validate_code_area,
-    extract_line_ending,
-    parse_file_line,
-    get_code_start_column,
-    is_area_a_content,
 )
 from cobol_anonymizer.exceptions import ColumnOverflowError
 
@@ -170,8 +169,16 @@ class TestParseLongLines:
         parsed = parse_line(line)
         assert parsed.original_length == 100
         # Standard areas are still 80 chars
-        assert len(parsed.sequence + parsed.indicator +
-                   parsed.area_a + parsed.area_b + parsed.identification) == 80
+        assert (
+            len(
+                parsed.sequence
+                + parsed.indicator
+                + parsed.area_a
+                + parsed.area_b
+                + parsed.identification
+            )
+            == 80
+        )
 
 
 class TestParseChangeTags:
@@ -308,7 +315,9 @@ class TestReconstructLine:
     def test_roundtrip_80_column_line(self):
         """80-column line survives round-trip."""
         # Build a proper 80-column line
-        original = "000100       05 WS-FIELD-NAME                  PIC X(10).                   TEST"
+        original = (
+            "000100       05 WS-FIELD-NAME                  PIC X(10).                   TEST"
+        )
         assert len(original) == 80
         parsed = parse_line(original)
         reconstructed = reconstruct_line(parsed, preserve_length=True)

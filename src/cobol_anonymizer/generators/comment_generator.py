@@ -8,15 +8,16 @@ This module handles:
 - Option to strip all comments
 """
 
-import re
 import random
+import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
 from enum import Enum
+from typing import Optional
 
 
 class CommentMode(Enum):
     """Comment anonymization modes."""
+
     ANONYMIZE = "anonymize"  # Replace content with meaningless filler text
     STRIP = "strip"  # Remove comment content entirely
     PRESERVE = "preserve"  # Keep comments unchanged
@@ -25,9 +26,27 @@ class CommentMode(Enum):
 # Generic filler words for generating meaningless comment text
 # These are neutral COBOL-like terms with no business meaning
 FILLER_WORDS = [
-    "BLAH", "DATA", "PROCESS", "VALUE", "FIELD", "ITEM", "CODE",
-    "TEXT", "NOTE", "INFO", "WORK", "TEMP", "AREA", "LINE",
-    "STEP", "TASK", "UNIT", "PART", "ELEM", "SECT", "BLOCK",
+    "BLAH",
+    "DATA",
+    "PROCESS",
+    "VALUE",
+    "FIELD",
+    "ITEM",
+    "CODE",
+    "TEXT",
+    "NOTE",
+    "INFO",
+    "WORK",
+    "TEMP",
+    "AREA",
+    "LINE",
+    "STEP",
+    "TASK",
+    "UNIT",
+    "PART",
+    "ELEM",
+    "SECT",
+    "BLOCK",
 ]
 
 
@@ -54,7 +73,7 @@ def generate_filler_text(length: int, seed: Optional[int] = None) -> str:
     current_length = 0
 
     # Sort filler words by length to find words that fit
-    sorted_fillers = sorted(FILLER_WORDS, key=len)
+    sorted(FILLER_WORDS, key=len)
 
     while current_length < length:
         # Find words that can fit in remaining space
@@ -85,13 +104,14 @@ def generate_filler_text(length: int, seed: Optional[int] = None) -> str:
 @dataclass
 class CommentConfig:
     """Configuration for comment handling."""
+
     mode: CommentMode = CommentMode.ANONYMIZE
     preserve_dividers: bool = True  # Keep lines like *------- or ******
     seed: Optional[int] = None  # Random seed for reproducible output
 
 
 # Italian to English term mappings for business domain
-ITALIAN_TERMS: Dict[str, str] = {
+ITALIAN_TERMS: dict[str, str] = {
     # Insurance terms
     "POLIZZA": "POLICY",
     "CONTRATTO": "CONTRACT",
@@ -113,7 +133,6 @@ ITALIAN_TERMS: Dict[str, str] = {
     "FRANCHIGIA": "DEDUCTIBLE",
     "MASSIMALE": "MAXIMUM",
     "CAPITALE": "CAPITAL",
-
     # Business terms
     "CLIENTE": "CLIENT",
     "AGENZIA": "AGENCY",
@@ -135,7 +154,6 @@ ITALIAN_TERMS: Dict[str, str] = {
     "VERIFICA": "VERIFICATION",
     "CONTROLLO": "CONTROL",
     "GESTIONE": "MANAGEMENT",
-
     # Date/time terms
     "DATA": "DATE",
     "GIORNO": "DAY",
@@ -143,7 +161,6 @@ ITALIAN_TERMS: Dict[str, str] = {
     "ANNO": "YEAR",
     "DECORRENZA": "START-DATE",
     "EFFETTO": "EFFECT",
-
     # General terms
     "NUMERO": "NUMBER",
     "CODICE": "CODE",
@@ -170,7 +187,6 @@ ITALIAN_TERMS: Dict[str, str] = {
     "INATTIVO": "INACTIVE",
     "VALIDO": "VALID",
     "INVALIDO": "INVALID",
-
     # Technical terms
     "AREA": "AREA",
     "CAMPO": "FIELD",
@@ -197,41 +213,81 @@ ITALIAN_TERMS: Dict[str, str] = {
 }
 
 # Common Italian personal names to remove
-PERSONAL_NAMES: Set[str] = {
-    "MASON", "LUPO", "ROSSI", "BIANCHI", "FERRARI", "RUSSO",
-    "ESPOSITO", "ROMANO", "COLOMBO", "RICCI", "MARINO", "GRECO",
-    "BRUNO", "GALLO", "CONTI", "LEONE", "COSTA", "GIORDANO",
-    "MANCINI", "RIZZO", "LOMBARDI", "MORETTI", "BARBIERI",
-    "FONTANA", "SANTORO", "CARUSO", "MARIANI", "RINALDI",
-    "MARCO", "LUCA", "ANDREA", "FRANCESCO", "GIUSEPPE",
-    "GIOVANNI", "ANTONIO", "LUIGI", "MARIO", "PAOLO",
-    "MARIA", "ANNA", "GIULIA", "SARA", "LAURA", "ELENA",
-    "FRANCESCA", "CHIARA", "SILVIA", "VALENTINA",
+PERSONAL_NAMES: set[str] = {
+    "MASON",
+    "LUPO",
+    "ROSSI",
+    "BIANCHI",
+    "FERRARI",
+    "RUSSO",
+    "ESPOSITO",
+    "ROMANO",
+    "COLOMBO",
+    "RICCI",
+    "MARINO",
+    "GRECO",
+    "BRUNO",
+    "GALLO",
+    "CONTI",
+    "LEONE",
+    "COSTA",
+    "GIORDANO",
+    "MANCINI",
+    "RIZZO",
+    "LOMBARDI",
+    "MORETTI",
+    "BARBIERI",
+    "FONTANA",
+    "SANTORO",
+    "CARUSO",
+    "MARIANI",
+    "RINALDI",
+    "MARCO",
+    "LUCA",
+    "ANDREA",
+    "FRANCESCO",
+    "GIUSEPPE",
+    "GIOVANNI",
+    "ANTONIO",
+    "LUIGI",
+    "MARIO",
+    "PAOLO",
+    "MARIA",
+    "ANNA",
+    "GIULIA",
+    "SARA",
+    "LAURA",
+    "ELENA",
+    "FRANCESCA",
+    "CHIARA",
+    "SILVIA",
+    "VALENTINA",
 }
 
 # Regex patterns for system identifiers
 SYSTEM_ID_PATTERNS = [
-    r'\bCRQ\d{9,15}\b',  # CRQ numbers (e.g., CRQ000002478171)
-    r'\bINC\d{9,15}\b',  # Incident numbers
-    r'\bCHG\d{9,15}\b',  # Change numbers
-    r'\bPRB\d{9,15}\b',  # Problem numbers
-    r'\bREQ\d{9,15}\b',  # Request numbers
-    r'\bSR\d{9,15}\b',   # Service request numbers
-    r'\b\d{2}/\d{2}/\d{4}\b',  # Dates DD/MM/YYYY
-    r'\b\d{4}/\d{2}/\d{2}\b',  # Dates YYYY/MM/DD
-    r'\b\d{2}-\d{2}-\d{4}\b',  # Dates DD-MM-YYYY
-    r'\b\d{8}\b',  # 8-digit dates YYYYMMDD
+    r"\bCRQ\d{9,15}\b",  # CRQ numbers (e.g., CRQ000002478171)
+    r"\bINC\d{9,15}\b",  # Incident numbers
+    r"\bCHG\d{9,15}\b",  # Change numbers
+    r"\bPRB\d{9,15}\b",  # Problem numbers
+    r"\bREQ\d{9,15}\b",  # Request numbers
+    r"\bSR\d{9,15}\b",  # Service request numbers
+    r"\b\d{2}/\d{2}/\d{4}\b",  # Dates DD/MM/YYYY
+    r"\b\d{4}/\d{2}/\d{2}\b",  # Dates YYYY/MM/DD
+    r"\b\d{2}-\d{2}-\d{4}\b",  # Dates DD-MM-YYYY
+    r"\b\d{8}\b",  # 8-digit dates YYYYMMDD
 ]
 
 
 @dataclass
 class CommentTransformResult:
     """Result of transforming a comment."""
+
     original_text: str
     transformed_text: str
     is_divider: bool = False
     is_stripped: bool = False
-    changes_made: List[Tuple[str, str]] = field(default_factory=list)
+    changes_made: list[tuple[str, str]] = field(default_factory=list)
 
 
 def is_comment_line(line: str) -> bool:
@@ -248,7 +304,7 @@ def is_comment_line(line: str) -> bool:
     """
     if len(line) < 7:
         return False
-    return line[6] == '*'
+    return line[6] == "*"
 
 
 def is_divider_line(comment_text: str) -> bool:
@@ -285,13 +341,13 @@ def is_divider_line(comment_text: str) -> bool:
     # Check for repeating patterns
     if len(set(text)) <= 3 and len(text) >= 5:
         # Only a few unique characters, likely a divider
-        if all(c in '-*=+#_|/' for c in text):
+        if all(c in "-*=+#_|/" for c in text):
             return True
 
     return False
 
 
-def remove_personal_names(text: str, counter: int = 0) -> Tuple[str, List[Tuple[str, str]]]:
+def remove_personal_names(text: str, counter: int = 0) -> tuple[str, list[tuple[str, str]]]:
     """
     Remove personal names from comment text.
 
@@ -306,7 +362,7 @@ def remove_personal_names(text: str, counter: int = 0) -> Tuple[str, List[Tuple[
     result = text
 
     for name in PERSONAL_NAMES:
-        pattern = re.compile(rf'\b{name}\b', re.IGNORECASE)
+        pattern = re.compile(rf"\b{name}\b", re.IGNORECASE)
         if pattern.search(result):
             replacement = f"USER{counter:03d}"
             result = pattern.sub(replacement, result)
@@ -316,7 +372,7 @@ def remove_personal_names(text: str, counter: int = 0) -> Tuple[str, List[Tuple[
     return result, changes
 
 
-def remove_system_ids(text: str) -> Tuple[str, List[Tuple[str, str]]]:
+def remove_system_ids(text: str) -> tuple[str, list[tuple[str, str]]]:
     """
     Remove system identifiers from comment text.
 
@@ -341,7 +397,7 @@ def remove_system_ids(text: str) -> Tuple[str, List[Tuple[str, str]]]:
     return result, changes
 
 
-def translate_italian_terms(text: str) -> Tuple[str, List[Tuple[str, str]]]:
+def translate_italian_terms(text: str) -> tuple[str, list[tuple[str, str]]]:
     """
     Translate Italian business terms to English.
 
@@ -358,7 +414,7 @@ def translate_italian_terms(text: str) -> Tuple[str, List[Tuple[str, str]]]:
     sorted_terms = sorted(ITALIAN_TERMS.items(), key=lambda x: len(x[0]), reverse=True)
 
     for italian, english in sorted_terms:
-        pattern = re.compile(rf'\b{italian}\b', re.IGNORECASE)
+        pattern = re.compile(rf"\b{italian}\b", re.IGNORECASE)
         if pattern.search(result):
             result = pattern.sub(english, result)
             changes.append((italian, english))
@@ -459,7 +515,7 @@ class CommentTransformer:
         result.changes_made = [(comment_text.strip(), filler.strip())]
         return result
 
-    def transform_line(self, line: str) -> Tuple[str, CommentTransformResult]:
+    def transform_line(self, line: str) -> tuple[str, CommentTransformResult]:
         """
         Transform a complete COBOL line if it's a comment.
 
@@ -516,7 +572,7 @@ def anonymize_comment(
     return result.transformed_text
 
 
-def detect_comment_lines(lines: List[str]) -> List[int]:
+def detect_comment_lines(lines: list[str]) -> list[int]:
     """
     Find all comment line numbers in a file.
 
@@ -529,7 +585,7 @@ def detect_comment_lines(lines: List[str]) -> List[int]:
     return [i + 1 for i, line in enumerate(lines) if is_comment_line(line)]
 
 
-def get_comment_statistics(lines: List[str]) -> Dict[str, int]:
+def get_comment_statistics(lines: list[str]) -> dict[str, int]:
     """
     Get statistics about comments in a file.
 
@@ -541,8 +597,7 @@ def get_comment_statistics(lines: List[str]) -> Dict[str, int]:
     """
     comment_lines = [line for line in lines if is_comment_line(line)]
     divider_lines = [
-        line for line in comment_lines
-        if is_divider_line(line[7:] if len(line) > 7 else "")
+        line for line in comment_lines if is_divider_line(line[7:] if len(line) > 7 else "")
     ]
 
     return {

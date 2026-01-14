@@ -4,20 +4,14 @@ Tests for Phase 7: Core Anonymizer.
 Tests for the main anonymization functionality.
 """
 
-import pytest
-from pathlib import Path
-
-from cobol_anonymizer.core.anonymizer import (
-    RedefinesEntry,
-    RedefinesTracker,
-    TransformResult,
-    LineTransformer,
-    FileTransformResult,
-    Anonymizer,
-)
 from cobol_anonymizer.cobol.column_handler import parse_line
-from cobol_anonymizer.core.mapper import MappingTable
+from cobol_anonymizer.core.anonymizer import (
+    Anonymizer,
+    LineTransformer,
+    RedefinesTracker,
+)
 from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.core.mapper import MappingTable
 
 
 class TestRedefinesTracker:
@@ -161,7 +155,8 @@ class TestAnonymizer:
         """Classify identifiers in a file."""
         # Create a simple COBOL file
         program = tmp_path / "TEST.cob"
-        program.write_text("""       IDENTIFICATION DIVISION.
+        program.write_text(
+            """       IDENTIFICATION DIVISION.
        PROGRAM-ID.    TESTPROG.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
@@ -170,7 +165,8 @@ class TestAnonymizer:
        PROCEDURE DIVISION.
        MAIN-PARA.
            STOP RUN.
-""")
+"""
+        )
 
         anon = Anonymizer(source_directory=tmp_path)
         identifiers = anon.classify_file(program)
@@ -212,9 +208,11 @@ class TestAnonymizer:
         """Transform a file with mappings."""
         # Create a COBOL file
         program = tmp_path / "TEST.cob"
-        program.write_text("""       01 WS-FIELD PIC X.
+        program.write_text(
+            """       01 WS-FIELD PIC X.
        01 WS-OTHER PIC 9.
-""")
+"""
+        )
 
         anon = Anonymizer(source_directory=tmp_path)
 
@@ -232,8 +230,10 @@ class TestAnonymizer:
     def test_anonymize_file(self, tmp_path):
         """Complete anonymization of a file."""
         program = tmp_path / "TEST.cob"
-        program.write_text("""       01 WS-CUSTOMER-NAME PIC X(30).
-""")
+        program.write_text(
+            """       01 WS-CUSTOMER-NAME PIC X(30).
+"""
+        )
 
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -281,7 +281,7 @@ class TestAnonymizerWithCopybooks:
         program.write_text("       COPY COPY1.")
 
         anon = Anonymizer(source_directory=tmp_path)
-        files = anon.discover_files()
+        anon.discover_files()
 
         # Processing order should have COPY2 before COPY1
         order = anon._processing_order
@@ -326,7 +326,7 @@ class TestAnonymizerOutput:
             output_directory=output_dir,
         )
 
-        result = anon.anonymize_file(program)
+        anon.anonymize_file(program)
 
         # Check output was written
         # The output filename may be anonymized

@@ -10,30 +10,29 @@ Key features:
 - Deterministic generation with optional seed
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Set
 import random
+from dataclasses import dataclass, field
+from typing import Optional
 
-from cobol_anonymizer.core.classifier import IdentifierType
 from cobol_anonymizer.cobol.reserved_words import is_reserved_word
-from cobol_anonymizer.core.utils import validate_identifier, MAX_IDENTIFIER_LENGTH
+from cobol_anonymizer.core.classifier import IdentifierType
+from cobol_anonymizer.core.utils import MAX_IDENTIFIER_LENGTH, validate_identifier
 from cobol_anonymizer.exceptions import (
-    ReservedWordCollisionError,
     IdentifierLengthError,
+    ReservedWordCollisionError,
 )
 from cobol_anonymizer.generators.naming_schemes import (
-    NamingScheme,
-    BaseNamingStrategy,
-    get_naming_strategy,
     NAME_PREFIXES,
-    get_prefix_for_type,
+    BaseNamingStrategy,
+    NamingScheme,
     format_numeric_name,
+    get_naming_strategy,
+    get_prefix_for_type,
 )
-
 
 # Re-export NAME_PREFIXES for backward compatibility
 # (imported from naming_schemes module)
-__all__ = ['NameGenerator', 'NameGeneratorConfig', 'NAME_PREFIXES', 'NamingScheme']
+__all__ = ["NameGenerator", "NameGeneratorConfig", "NAME_PREFIXES", "NamingScheme"]
 
 
 @dataclass
@@ -48,6 +47,7 @@ class NameGeneratorConfig:
         seed: Random seed for deterministic generation
         naming_scheme: The naming scheme to use (default: NUMERIC)
     """
+
     preserve_length: bool = True
     min_length: int = 4
     max_length: int = MAX_IDENTIFIER_LENGTH
@@ -70,9 +70,10 @@ class NameGenerator:
         new_name = generator.generate("WS-CUSTOMER-NAME", IdentifierType.DATA_NAME)
         # -> "FLUFFY-LLAMA-1"
     """
+
     config: NameGeneratorConfig = field(default_factory=NameGeneratorConfig)
-    _counters: Dict[IdentifierType, int] = field(default_factory=dict)
-    _generated_names: Set[str] = field(default_factory=set)
+    _counters: dict[IdentifierType, int] = field(default_factory=dict)
+    _generated_names: set[str] = field(default_factory=set)
     _random: Optional[random.Random] = None
     _strategy: Optional[BaseNamingStrategy] = field(default=None, init=False)
 
@@ -120,11 +121,9 @@ class NameGenerator:
 
         # Generate the name using the strategy
         max_retries = 1000
-        for attempt in range(max_retries):
+        for _attempt in range(max_retries):
             # Delegate to the naming strategy
-            name = self._strategy.generate_name(
-                original_name, id_type, counter, length
-            )
+            name = self._strategy.generate_name(original_name, id_type, counter, length)
 
             # Validate the generated name
             if self._is_valid_name(name):
@@ -168,11 +167,11 @@ class NameGenerator:
         except Exception:
             return False
 
-    def get_counter_state(self) -> Dict[IdentifierType, int]:
+    def get_counter_state(self) -> dict[IdentifierType, int]:
         """Get the current counter state for all types."""
         return dict(self._counters)
 
-    def set_counter_state(self, state: Dict[IdentifierType, int]) -> None:
+    def set_counter_state(self, state: dict[IdentifierType, int]) -> None:
         """Set the counter state (for resuming generation)."""
         self._counters = dict(state)
 

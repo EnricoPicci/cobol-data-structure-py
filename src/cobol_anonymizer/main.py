@@ -8,33 +8,38 @@ a programmatic API for the anonymization process.
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from cobol_anonymizer.config import Config, create_default_config
 from cobol_anonymizer.core.anonymizer import Anonymizer, FileTransformResult
 from cobol_anonymizer.core.mapper import MappingTable
-from cobol_anonymizer.generators.comment_generator import CommentTransformer, CommentConfig, CommentMode
-from cobol_anonymizer.output.writer import OutputWriter, WriterConfig
-from cobol_anonymizer.output.validator import OutputValidator, ValidationResult
+from cobol_anonymizer.generators.comment_generator import (
+    CommentConfig,
+    CommentMode,
+    CommentTransformer,
+)
 from cobol_anonymizer.output.report import AnonymizationReport, ReportGenerator
+from cobol_anonymizer.output.validator import OutputValidator, ValidationResult
+from cobol_anonymizer.output.writer import OutputWriter, WriterConfig
 
 # Type aliases for callbacks
 OnFileStartCallback = Callable[[Path, int, int], None]  # (file_path, index, total)
 OnFileCompleteCallback = Callable[[Path, Optional[FileTransformResult]], None]
-OnFilesDiscoveredCallback = Callable[[List[Path]], None]
+OnFilesDiscoveredCallback = Callable[[list[Path]], None]
 
 
 @dataclass
 class AnonymizationResult:
     """Result of running the full anonymization pipeline."""
+
     success: bool
-    file_results: List[FileTransformResult] = field(default_factory=list)
+    file_results: list[FileTransformResult] = field(default_factory=list)
     mapping_table: Optional[MappingTable] = None
     mapping_file: Optional[Path] = None
     report: Optional[AnonymizationReport] = None
     validation_result: Optional[ValidationResult] = None
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     processing_time: float = 0.0
 
 
@@ -154,6 +159,7 @@ class AnonymizationPipeline:
                     result.errors.append(f"Error processing {file_path}: {e}")
                     if self.config.verbose:
                         import traceback
+
                         result.errors.append(traceback.format_exc())
 
             # Save mappings (JSON and CSV) - use default path if not specified
@@ -164,7 +170,7 @@ class AnonymizationPipeline:
 
                 self.anonymizer.save_mappings(mapping_file)
                 # Also save CSV version
-                csv_file = mapping_file.with_suffix('.csv')
+                csv_file = mapping_file.with_suffix(".csv")
                 self.anonymizer.save_mappings_csv(csv_file)
 
                 # Store the actual mapping file path used
@@ -172,13 +178,9 @@ class AnonymizationPipeline:
 
             # Validate output
             if not self.config.dry_run and self.config.output_dir.exists():
-                result.validation_result = self.validator.validate_directory(
-                    self.config.output_dir
-                )
+                result.validation_result = self.validator.validate_directory(self.config.output_dir)
                 if not result.validation_result.is_valid:
-                    result.warnings.extend(
-                        str(issue) for issue in result.validation_result.issues
-                    )
+                    result.warnings.extend(str(issue) for issue in result.validation_result.issues)
 
             # Store mapping table
             result.mapping_table = self.anonymizer.mapping_table

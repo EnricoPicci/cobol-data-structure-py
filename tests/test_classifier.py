@@ -4,15 +4,13 @@ Tests for Phase 4: Identifier Classification.
 Tests for COBOL identifier classification by type.
 """
 
-import pytest
-
 from cobol_anonymizer.core.classifier import (
-    IdentifierType,
-    Division,
-    DataSection,
     ClassifiedIdentifier,
+    DataSection,
+    Division,
     FileContext,
     IdentifierClassifier,
+    IdentifierType,
     classify_cobol_file,
 )
 

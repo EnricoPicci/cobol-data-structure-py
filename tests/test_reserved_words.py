@@ -4,16 +4,13 @@ Tests for Phase 3.1: COBOL Reserved Words.
 Tests for reserved word detection and classification.
 """
 
-import pytest
-
 from cobol_anonymizer.cobol.reserved_words import (
     RESERVED_WORDS,
-    is_reserved_word,
-    is_figurative_constant,
-    is_special_register,
     get_reserved_word_category,
+    is_figurative_constant,
+    is_reserved_word,
+    is_special_register,
     is_system_identifier,
-    SYSTEM_PREFIXES,
 )
 
 
@@ -291,12 +288,39 @@ class TestReservedWordCoverage:
     def test_common_verbs_covered(self):
         """Common COBOL verbs are in the list."""
         verbs = [
-            "ACCEPT", "ADD", "CALL", "CLOSE", "COMPUTE", "DELETE",
-            "DISPLAY", "DIVIDE", "EVALUATE", "EXIT", "GO", "GOBACK",
-            "IF", "INITIALIZE", "INSPECT", "MERGE", "MOVE", "MULTIPLY",
-            "OPEN", "PERFORM", "READ", "RELEASE", "RETURN", "REWRITE",
-            "SEARCH", "SET", "SORT", "START", "STOP", "STRING",
-            "SUBTRACT", "UNSTRING", "WRITE",
+            "ACCEPT",
+            "ADD",
+            "CALL",
+            "CLOSE",
+            "COMPUTE",
+            "DELETE",
+            "DISPLAY",
+            "DIVIDE",
+            "EVALUATE",
+            "EXIT",
+            "GO",
+            "GOBACK",
+            "IF",
+            "INITIALIZE",
+            "INSPECT",
+            "MERGE",
+            "MOVE",
+            "MULTIPLY",
+            "OPEN",
+            "PERFORM",
+            "READ",
+            "RELEASE",
+            "RETURN",
+            "REWRITE",
+            "SEARCH",
+            "SET",
+            "SORT",
+            "START",
+            "STOP",
+            "STRING",
+            "SUBTRACT",
+            "UNSTRING",
+            "WRITE",
         ]
         for verb in verbs:
             assert is_reserved_word(verb), f"{verb} should be reserved"
@@ -304,11 +328,24 @@ class TestReservedWordCoverage:
     def test_end_variants_covered(self):
         """END-xxx variants are covered."""
         end_variants = [
-            "END-ADD", "END-CALL", "END-COMPUTE", "END-DELETE",
-            "END-DIVIDE", "END-EVALUATE", "END-IF", "END-MULTIPLY",
-            "END-PERFORM", "END-READ", "END-RETURN", "END-REWRITE",
-            "END-SEARCH", "END-START", "END-STRING", "END-SUBTRACT",
-            "END-UNSTRING", "END-WRITE",
+            "END-ADD",
+            "END-CALL",
+            "END-COMPUTE",
+            "END-DELETE",
+            "END-DIVIDE",
+            "END-EVALUATE",
+            "END-IF",
+            "END-MULTIPLY",
+            "END-PERFORM",
+            "END-READ",
+            "END-RETURN",
+            "END-REWRITE",
+            "END-SEARCH",
+            "END-START",
+            "END-STRING",
+            "END-SUBTRACT",
+            "END-UNSTRING",
+            "END-WRITE",
         ]
         for variant in end_variants:
             assert is_reserved_word(variant), f"{variant} should be reserved"

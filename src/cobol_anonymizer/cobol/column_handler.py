@@ -11,23 +11,24 @@ COBOL uses a fixed-column format:
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Set
+from typing import Optional
 
 from cobol_anonymizer.exceptions import ColumnOverflowError
 
 
 class IndicatorType(Enum):
     """COBOL column 7 indicator types."""
-    BLANK = " "       # Normal code line
-    COMMENT = "*"     # Comment line
-    PAGE = "/"        # Page eject (treated as comment)
-    DEBUG = "D"       # Debug line
+
+    BLANK = " "  # Normal code line
+    COMMENT = "*"  # Comment line
+    PAGE = "/"  # Page eject (treated as comment)
+    DEBUG = "D"  # Debug line
     CONTINUATION = "-"  # Continuation of previous line
 
 
 # Known change tags found in sequence area (columns 1-6)
 # These are markers added by developers to track changes
-CHANGE_TAGS: Set[str] = {
+CHANGE_TAGS: set[str] = {
     "BENIQ",
     "CDR",
     "DM2724",
@@ -38,15 +39,15 @@ CHANGE_TAGS: Set[str] = {
 }
 
 # Column position constants
-SEQUENCE_START = 0   # Column 1 (0-indexed)
-SEQUENCE_END = 6     # Column 6 (exclusive)
-INDICATOR_COL = 6    # Column 7 (0-indexed)
-AREA_A_START = 7     # Column 8 (0-indexed)
-AREA_A_END = 11      # Column 11 (exclusive)
-AREA_B_START = 11    # Column 12 (0-indexed)
-CODE_END = 72        # Column 72 (exclusive)
-ID_AREA_START = 72   # Column 73 (0-indexed)
-MAX_LINE_LENGTH = 80 # Maximum line length
+SEQUENCE_START = 0  # Column 1 (0-indexed)
+SEQUENCE_END = 6  # Column 6 (exclusive)
+INDICATOR_COL = 6  # Column 7 (0-indexed)
+AREA_A_START = 7  # Column 8 (0-indexed)
+AREA_A_END = 11  # Column 11 (exclusive)
+AREA_B_START = 11  # Column 12 (0-indexed)
+CODE_END = 72  # Column 72 (exclusive)
+ID_AREA_START = 72  # Column 73 (0-indexed)
+MAX_LINE_LENGTH = 80  # Maximum line length
 
 
 @dataclass
@@ -67,6 +68,7 @@ class COBOLLine:
         has_change_tag: Whether sequence area contains a known change tag
         change_tag: The detected change tag, if any
     """
+
     raw: str
     line_number: int
     sequence: str
@@ -165,10 +167,10 @@ def parse_line(line: str, line_number: int = 1, line_ending: str = "\n") -> COBO
     padded = processed_line.ljust(80)
 
     # Extract column areas
-    sequence = padded[0:6]       # Columns 1-6
-    indicator = padded[6:7]     # Column 7
-    area_a = padded[7:11]       # Columns 8-11
-    area_b = padded[11:72]      # Columns 12-72
+    sequence = padded[0:6]  # Columns 1-6
+    indicator = padded[6:7]  # Column 7
+    area_a = padded[7:11]  # Columns 8-11
+    area_b = padded[11:72]  # Columns 12-72
     identification = padded[72:80]  # Columns 73-80
 
     # Detect change tags
@@ -203,18 +205,18 @@ def reconstruct_line(cobol_line: COBOLLine, preserve_length: bool = True) -> str
     """
     # Combine all areas
     full_line = (
-        cobol_line.sequence +
-        cobol_line.indicator +
-        cobol_line.area_a +
-        cobol_line.area_b +
-        cobol_line.identification
+        cobol_line.sequence
+        + cobol_line.indicator
+        + cobol_line.area_a
+        + cobol_line.area_b
+        + cobol_line.identification
     )
 
     if preserve_length:
         # Preserve original length exactly
         if cobol_line.original_length < len(full_line):
             # Truncate to original length (rare case)
-            return full_line[:cobol_line.original_length]
+            return full_line[: cobol_line.original_length]
         elif cobol_line.original_length > len(full_line):
             # Pad to original length
             return full_line.ljust(cobol_line.original_length)

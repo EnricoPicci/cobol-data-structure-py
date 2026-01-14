@@ -18,33 +18,35 @@ PIC clause patterns:
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Optional
 
 
 class PICType(Enum):
     """Type of PIC clause data."""
-    ALPHANUMERIC = "X"      # PIC X(n)
-    NUMERIC = "9"           # PIC 9(n)
-    ALPHABETIC = "A"        # PIC A(n)
-    EDITED_NUMERIC = "Z"    # PIC Z(n), PIC -, etc.
-    SIGN = "S"              # Signed
-    DECIMAL = "V"           # Decimal point
-    MIXED = "MIXED"         # Complex pattern
+
+    ALPHANUMERIC = "X"  # PIC X(n)
+    NUMERIC = "9"  # PIC 9(n)
+    ALPHABETIC = "A"  # PIC A(n)
+    EDITED_NUMERIC = "Z"  # PIC Z(n), PIC -, etc.
+    SIGN = "S"  # Signed
+    DECIMAL = "V"  # Decimal point
+    MIXED = "MIXED"  # Complex pattern
 
 
 class UsageType(Enum):
     """COBOL USAGE clause types."""
-    DISPLAY = "DISPLAY"         # Default, character representation
-    COMP = "COMP"               # Binary (synonym COMPUTATIONAL)
-    COMP_1 = "COMP-1"           # Single-precision floating point
-    COMP_2 = "COMP-2"           # Double-precision floating point
-    COMP_3 = "COMP-3"           # Packed decimal (synonym COMPUTATIONAL-3)
-    COMP_4 = "COMP-4"           # Binary (synonym for COMP on many systems)
-    COMP_5 = "COMP-5"           # Native binary
-    BINARY = "BINARY"           # Binary integer
+
+    DISPLAY = "DISPLAY"  # Default, character representation
+    COMP = "COMP"  # Binary (synonym COMPUTATIONAL)
+    COMP_1 = "COMP-1"  # Single-precision floating point
+    COMP_2 = "COMP-2"  # Double-precision floating point
+    COMP_3 = "COMP-3"  # Packed decimal (synonym COMPUTATIONAL-3)
+    COMP_4 = "COMP-4"  # Binary (synonym for COMP on many systems)
+    COMP_5 = "COMP-5"  # Native binary
+    BINARY = "BINARY"  # Binary integer
     PACKED_DECIMAL = "PACKED-DECIMAL"  # Same as COMP-3
-    POINTER = "POINTER"         # Pointer
-    INDEX = "INDEX"             # Index data item
+    POINTER = "POINTER"  # Pointer
+    INDEX = "INDEX"  # Index data item
 
 
 @dataclass
@@ -60,6 +62,7 @@ class PICClause:
         pattern: The pattern portion (e.g., "X(30)", "S9(5)V99")
         length: Calculated storage length in characters/digits
     """
+
     raw: str
     start_pos: int
     end_pos: int
@@ -79,6 +82,7 @@ class UsageClause:
         end_pos: Ending position in the line
         usage_type: The USAGE type
     """
+
     raw: str
     start_pos: int
     end_pos: int
@@ -89,28 +93,26 @@ class UsageClause:
 # Match PIC or PICTURE, optional IS, then the pattern
 # The pattern includes letters, digits, parentheses, and punctuation
 PIC_PATTERN = re.compile(
-    r'\b(PIC(?:TURE)?)\s+(?:IS\s+)?'
-    r'([SsVvXxAa9ZzBbPp0/,\-\+\*\(\)0-9]+)(?:\.)?',
-    re.IGNORECASE
+    r"\b(PIC(?:TURE)?)\s+(?:IS\s+)?" r"([SsVvXxAa9ZzBbPp0/,\-\+\*\(\)0-9]+)(?:\.)?", re.IGNORECASE
 )
 
 # Pattern to extract repetition count like X(30) or 9(5)
-REPETITION_PATTERN = re.compile(r'([XxAa9Zz])\((\d+)\)')
+REPETITION_PATTERN = re.compile(r"([XxAa9Zz])\((\d+)\)")
 
 # Pattern to match individual PIC characters and their counts
-PIC_CHAR_PATTERN = re.compile(r'([XxAa9SsVvZzBbPp\-\+\.\*])(?:\((\d+)\))?')
+PIC_CHAR_PATTERN = re.compile(r"([XxAa9SsVvZzBbPp\-\+\.\*])(?:\((\d+)\))?")
 
 # USAGE clause patterns
 # Use stricter matching to avoid matching INDEX within identifiers like WS-INDEX
 USAGE_PATTERN = re.compile(
-    r'(?:^|[\s\.])(?:USAGE\s+(?:IS\s+)?)?'
-    r'(COMP(?:UTATIONAL)?(?:-[1-5])?|BINARY|PACKED-DECIMAL|DISPLAY|POINTER|INDEX)'
-    r'(?=[\s\.\,]|$)',
-    re.IGNORECASE
+    r"(?:^|[\s\.])(?:USAGE\s+(?:IS\s+)?)?"
+    r"(COMP(?:UTATIONAL)?(?:-[1-5])?|BINARY|PACKED-DECIMAL|DISPLAY|POINTER|INDEX)"
+    r"(?=[\s\.\,]|$)",
+    re.IGNORECASE,
 )
 
 
-def find_pic_clauses(line: str) -> List[PICClause]:
+def find_pic_clauses(line: str) -> list[PICClause]:
     """
     Find all PIC clauses in a line.
 
@@ -123,7 +125,7 @@ def find_pic_clauses(line: str) -> List[PICClause]:
     clauses = []
 
     for match in PIC_PATTERN.finditer(line):
-        keyword = match.group(1)
+        match.group(1)
         pattern = match.group(2)
 
         # Calculate the length
@@ -145,7 +147,7 @@ def find_pic_clauses(line: str) -> List[PICClause]:
     return clauses
 
 
-def find_usage_clauses(line: str) -> List[UsageClause]:
+def find_usage_clauses(line: str) -> list[UsageClause]:
     """
     Find all USAGE clauses in a line.
 
@@ -220,16 +222,16 @@ def calculate_pic_length(pattern: str) -> int:
         count = int(count_str) if count_str else 1
 
         # Characters that take display positions
-        if char in ('X', 'A', '9', 'Z', 'B', '-', '+', '.', '*', '/'):
+        if char in ("X", "A", "9", "Z", "B", "-", "+", ".", "*", "/"):
             length += count
-        elif char == 'S':
+        elif char == "S":
             # Sign - separate sign takes position, embedded doesn't
             # For simplicity, assume embedded (no position)
             pass
-        elif char == 'V':
+        elif char == "V":
             # Assumed decimal - no display position
             pass
-        elif char == 'P':
+        elif char == "P":
             # Scaling position - no display position
             pass
 
@@ -249,13 +251,12 @@ def determine_pic_type(pattern: str) -> PICType:
     upper_pattern = pattern.upper()
 
     # Check for various patterns
-    has_x = 'X' in upper_pattern
-    has_a = 'A' in upper_pattern
-    has_9 = '9' in upper_pattern
-    has_s = 'S' in upper_pattern
-    has_v = 'V' in upper_pattern
-    has_z = 'Z' in upper_pattern
-    has_edit = any(c in upper_pattern for c in ('Z', 'B', '-', '+', '*', '/'))
+    has_x = "X" in upper_pattern
+    has_a = "A" in upper_pattern
+    has_9 = "9" in upper_pattern
+    has_s = "S" in upper_pattern
+    has_v = "V" in upper_pattern
+    has_edit = any(c in upper_pattern for c in ("Z", "B", "-", "+", "*", "/"))
 
     # Determine type
     if has_edit:
@@ -310,7 +311,7 @@ def is_in_usage_clause(line: str, position: int) -> bool:
     return False
 
 
-def get_protected_ranges(line: str) -> List[Tuple[int, int]]:
+def get_protected_ranges(line: str) -> list[tuple[int, int]]:
     """
     Get all ranges in the line that should not be modified.
 
@@ -382,9 +383,9 @@ def _has_clause(line: str, clause_name: str, require_trailing_space: bool = True
         True if the clause is present
     """
     if require_trailing_space:
-        pattern = rf'\b{clause_name}\s+'
+        pattern = rf"\b{clause_name}\s+"
     else:
-        pattern = rf'\b{clause_name}\b'
+        pattern = rf"\b{clause_name}\b"
     return bool(re.search(pattern, line, re.IGNORECASE))
 
 

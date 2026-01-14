@@ -7,23 +7,26 @@
 ## Quick Commands
 
 ```bash
-# Run all tests
+# Run all tests (coverage report included automatically)
 pytest
 
-# Run tests with coverage
-pytest --cov=src/cobol_anonymizer
+# Run all checks (format, lint, typecheck, test)
+make all
+
+# Generate HTML coverage report
+make test-cov
 
 # Run specific test file
 pytest tests/test_anonymizer.py
 
 # Format code
-black src tests --line-length 100
+make format
 
 # Lint code
-ruff check src tests
+make lint
 
 # Type checking
-mypy src
+make typecheck
 
 # Run the CLI
 python -m cobol_anonymizer --input <dir> --output <dir>
@@ -38,8 +41,11 @@ src/cobol_anonymizer/
 ├── generators/     # Name generation: naming_schemes (5 strategies)
 └── output/         # Output handling: writer, validator, report
 
-tests/              # Comprehensive pytest suite (16 test files)
-docs/               # Design docs: DESIGN.md, IMPLEMENTATION_PLAN.md
+tests/              # Comprehensive pytest suite
+docs/               # Documentation (design, plans, analysis)
+Makefile            # Development commands (make help for list)
+README.md           # User documentation
+CONTRIBUTING.md     # Contributor guidelines
 ```
 
 ## Architecture
@@ -141,23 +147,26 @@ The `MappingTable` ensures cross-file consistency - same identifier always maps 
 
 ### Running Tests
 ```bash
-# All tests
+# All tests (coverage report included automatically)
 pytest
+
+# All tests with HTML coverage report
+make test-cov
 
 # Specific module
 pytest tests/test_naming_schemes.py
 
-# With verbose output
-pytest -v
-
 # Stop on first failure
 pytest -x
+
+# Run all checks (format, lint, typecheck, test)
+make all
 ```
 
 ## Code Style
 
 - **Formatter**: Black (line-length: 100)
-- **Linter**: Ruff (line-length: 100)
+- **Linter**: Ruff (line-length: 100, rules: E, W, F, I, B, C4, UP)
 - **Type checker**: mypy (Python 3.9 target)
 - **Python version**: 3.9+
 
@@ -188,9 +197,10 @@ Support parameterized COPY statements with identifier substitution.
 
 ### Adding a New Naming Scheme
 1. Add scheme to `NamingScheme` enum in `generators/naming_schemes.py`
-2. Add word lists (adjectives + nouns) if word-based
-3. Implement generation logic in `NameGenerator`
-4. Add tests in `tests/test_naming_schemes.py`
+2. Create a new strategy class extending `WordBasedNamingStrategy` or `BaseNamingStrategy`
+3. Add word lists (adjectives + nouns) if word-based
+4. Register in `_STRATEGY_REGISTRY`
+5. Add tests in `tests/test_naming_schemes.py`
 
 ### Adding New Identifier Type
 1. Add type to `IdentifierType` enum in `core/classifier.py`

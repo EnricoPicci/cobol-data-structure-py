@@ -9,10 +9,10 @@ This module handles:
 """
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
@@ -48,11 +48,12 @@ class Config:
         log_level: Logging level
         overwrite: Overwrite existing output files
     """
+
     input_dir: Path = field(default_factory=lambda: Path("."))
     output_dir: Path = field(default_factory=lambda: Path("anonymized"))
-    extensions: List[str] = field(default_factory=lambda: [".cob", ".cbl", ".cpy"])
+    extensions: list[str] = field(default_factory=lambda: [".cob", ".cbl", ".cpy"])
     encoding: str = "latin-1"
-    copybook_paths: List[Path] = field(default_factory=list)
+    copybook_paths: list[Path] = field(default_factory=list)
     mapping_file: Optional[Path] = None
     load_mappings: Optional[Path] = None
 
@@ -82,7 +83,7 @@ class Config:
     log_level: str = "INFO"
     overwrite: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary."""
         data = {}
         for key, value in asdict(self).items():
@@ -107,7 +108,7 @@ class Config:
         return cls.from_dict(data)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Config":
+    def from_dict(cls, data: dict[str, Any]) -> "Config":
         """Create config from dictionary."""
         # Convert path strings to Path objects
         if "input_dir" in data:
@@ -135,7 +136,7 @@ class Config:
 
         return cls(**filtered_data)
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """
         Validate configuration.
 

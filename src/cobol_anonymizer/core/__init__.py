@@ -10,11 +10,11 @@ This package contains the core processing logic:
 """
 
 from cobol_anonymizer.core.utils import (
-    validate_identifier,
-    normalize_identifier,
     identifiers_equal,
-    is_level_number,
     is_filler,
+    is_level_number,
+    normalize_identifier,
+    validate_identifier,
 )
 
 __all__ = [

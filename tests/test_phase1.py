@@ -4,34 +4,35 @@ Tests for Phase 1: Project Foundation.
 Tests for exceptions, logging, and utility functions.
 """
 
-import pytest
 import logging
 
-from cobol_anonymizer.exceptions import (
-    AnonymizerError,
-    ParseError,
-    MappingError,
-    ValidationError,
-    ColumnOverflowError,
-    IdentifierLengthError,
-    InvalidIdentifierError,
-    ConfigError,
-    CopyNotFoundError,
-    CircularDependencyError,
-    ReservedWordCollisionError,
-)
-from cobol_anonymizer.logging_config import setup_logging, get_logger
+import pytest
+
 from cobol_anonymizer.core.utils import (
-    validate_identifier,
-    normalize_identifier,
-    identifiers_equal,
-    is_level_number,
+    calculate_column_position,
     get_level_number,
+    identifiers_equal,
     is_filler,
+    is_level_number,
+    normalize_identifier,
     pad_to_length,
     truncate_to_length,
-    calculate_column_position,
+    validate_identifier,
 )
+from cobol_anonymizer.exceptions import (
+    AnonymizerError,
+    CircularDependencyError,
+    ColumnOverflowError,
+    ConfigError,
+    CopyNotFoundError,
+    IdentifierLengthError,
+    InvalidIdentifierError,
+    MappingError,
+    ParseError,
+    ReservedWordCollisionError,
+    ValidationError,
+)
+from cobol_anonymizer.logging_config import get_logger, setup_logging
 
 
 class TestExceptions:

@@ -10,14 +10,14 @@ This module handles:
 """
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
-from collections import defaultdict
+from typing import Optional
 
 from cobol_anonymizer.exceptions import (
-    CopyNotFoundError,
     CircularDependencyError,
+    CopyNotFoundError,
 )
 
 
@@ -31,6 +31,7 @@ class ReplacingPair:
         replacement: The replacement text
         is_pseudo_text: True if using ==...== syntax
     """
+
     pattern: str
     replacement: str
     is_pseudo_text: bool = False
@@ -54,9 +55,10 @@ class CopyStatement:
         source_file: File containing the COPY statement
         raw_text: The original COPY statement text
     """
+
     copybook_name: str
     library: Optional[str] = None
-    replacements: List[ReplacingPair] = field(default_factory=list)
+    replacements: list[ReplacingPair] = field(default_factory=list)
     line_number: int = 0
     source_file: Optional[str] = None
     raw_text: str = ""
@@ -70,23 +72,19 @@ class CopyStatement:
 # Regex for parsing COPY statements
 # Handles: COPY name [OF library] [REPLACING ...].
 COPY_PATTERN = re.compile(
-    r'\bCOPY\s+([A-Za-z][A-Za-z0-9\-]*)'  # Copybook name
-    r'(?:\s+OF\s+([A-Za-z][A-Za-z0-9\-]*))?'  # Optional OF library
-    r'(?:\s+REPLACING\s+(.+?))?'  # Optional REPLACING clause
-    r'\s*\.',  # Terminating period
-    re.IGNORECASE | re.DOTALL
+    r"\bCOPY\s+([A-Za-z][A-Za-z0-9\-]*)"  # Copybook name
+    r"(?:\s+OF\s+([A-Za-z][A-Za-z0-9\-]*))?"  # Optional OF library
+    r"(?:\s+REPLACING\s+(.+?))?"  # Optional REPLACING clause
+    r"\s*\.",  # Terminating period
+    re.IGNORECASE | re.DOTALL,
 )
 
 # Regex for pseudo-text replacement: ==text== BY ==text==
-PSEUDO_TEXT_PATTERN = re.compile(
-    r'==([^=]*)==\s+BY\s+==([^=]*)==',
-    re.IGNORECASE
-)
+PSEUDO_TEXT_PATTERN = re.compile(r"==([^=]*)==\s+BY\s+==([^=]*)==", re.IGNORECASE)
 
 # Regex for simple replacement: identifier BY identifier
 SIMPLE_REPLACING_PATTERN = re.compile(
-    r'([A-Za-z][A-Za-z0-9\-]*)\s+BY\s+([A-Za-z][A-Za-z0-9\-]*)',
-    re.IGNORECASE
+    r"([A-Za-z][A-Za-z0-9\-]*)\s+BY\s+([A-Za-z][A-Za-z0-9\-]*)", re.IGNORECASE
 )
 
 
@@ -128,7 +126,7 @@ def parse_copy_statement(
     )
 
 
-def parse_replacing_clause(replacing_text: str) -> List[ReplacingPair]:
+def parse_replacing_clause(replacing_text: str) -> list[ReplacingPair]:
     """
     Parse a REPLACING clause to extract replacement pairs.
 
@@ -145,29 +143,33 @@ def parse_replacing_clause(replacing_text: str) -> List[ReplacingPair]:
     # First, try to find pseudo-text patterns ==...== BY ==...==
     pseudo_matches = PSEUDO_TEXT_PATTERN.findall(replacing_text)
     for pattern, replacement in pseudo_matches:
-        pairs.append(ReplacingPair(
-            pattern=pattern.strip(),
-            replacement=replacement.strip(),
-            is_pseudo_text=True,
-        ))
+        pairs.append(
+            ReplacingPair(
+                pattern=pattern.strip(),
+                replacement=replacement.strip(),
+                is_pseudo_text=True,
+            )
+        )
 
     # If no pseudo-text found, try simple identifier replacement
     if not pairs:
         simple_matches = SIMPLE_REPLACING_PATTERN.findall(replacing_text)
         for pattern, replacement in simple_matches:
-            pairs.append(ReplacingPair(
-                pattern=pattern,
-                replacement=replacement,
-                is_pseudo_text=False,
-            ))
+            pairs.append(
+                ReplacingPair(
+                    pattern=pattern,
+                    replacement=replacement,
+                    is_pseudo_text=False,
+                )
+            )
 
     return pairs
 
 
 def find_copy_statements(
-    lines: List[str],
+    lines: list[str],
     filename: str,
-) -> List[CopyStatement]:
+) -> list[CopyStatement]:
     """
     Find all COPY statements in a file's lines.
 
@@ -184,7 +186,7 @@ def find_copy_statements(
     full_text = ""
     line_starts = []  # Track where each line starts
 
-    for i, line in enumerate(lines, 1):
+    for _i, line in enumerate(lines, 1):
         line_starts.append(len(full_text))
         full_text += line + "\n"
 
@@ -216,7 +218,7 @@ def normalize_filename(filename: str) -> str:
     # Remove common extensions
     for ext in [".CPY", ".COB", ".CBL"]:
         if name.endswith(ext):
-            name = name[:-len(ext)]
+            name = name[: -len(ext)]
             break
     return name
 
@@ -228,16 +230,19 @@ class DependencyGraph:
 
     Provides topological sorting and cycle detection.
     """
+
     # file -> set of copybooks it depends on
-    dependencies: Dict[str, Set[str]] = field(default_factory=lambda: defaultdict(set))
+    dependencies: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
     # All known files
-    all_files: Set[str] = field(default_factory=set)
+    all_files: set[str] = field(default_factory=set)
     # Copybook -> files that use it
-    reverse_deps: Dict[str, Set[str]] = field(default_factory=lambda: defaultdict(set))
+    reverse_deps: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
     # File -> CopyStatements
-    copy_statements: Dict[str, List[CopyStatement]] = field(default_factory=lambda: defaultdict(list))
+    copy_statements: dict[str, list[CopyStatement]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
     # Mapping from normalized name to original filename
-    _original_names: Dict[str, str] = field(default_factory=dict)
+    _original_names: dict[str, str] = field(default_factory=dict)
 
     def _normalize(self, filename: str) -> str:
         """Normalize filename for consistent lookup."""
@@ -277,15 +282,15 @@ class DependencyGraph:
         if statement:
             self.copy_statements[source_norm].append(statement)
 
-    def get_dependencies(self, filename: str) -> Set[str]:
+    def get_dependencies(self, filename: str) -> set[str]:
         """Get all direct dependencies of a file."""
         return self.dependencies.get(self._normalize(filename), set())
 
-    def get_dependents(self, filename: str) -> Set[str]:
+    def get_dependents(self, filename: str) -> set[str]:
         """Get all files that depend on this file."""
         return self.reverse_deps.get(self._normalize(filename), set())
 
-    def detect_cycles(self) -> Optional[List[str]]:
+    def detect_cycles(self) -> Optional[list[str]]:
         """
         Detect circular dependencies.
 
@@ -294,10 +299,10 @@ class DependencyGraph:
         """
         # Use DFS coloring: WHITE=unvisited, GRAY=in progress, BLACK=done
         WHITE, GRAY, BLACK = 0, 1, 2
-        colors = {f: WHITE for f in self.all_files}
+        colors = dict.fromkeys(self.all_files, WHITE)
         path = []
 
-        def dfs(node: str) -> Optional[List[str]]:
+        def dfs(node: str) -> Optional[list[str]]:
             colors[node] = GRAY
             path.append(node)
 
@@ -323,7 +328,7 @@ class DependencyGraph:
 
         return None
 
-    def topological_sort(self) -> List[str]:
+    def topological_sort(self) -> list[str]:
         """
         Return files in dependency order (dependencies first).
 
@@ -339,15 +344,10 @@ class DependencyGraph:
             raise CircularDependencyError(cycle)
 
         # Kahn's algorithm for topological sort
-        in_degree = {f: 0 for f in self.all_files}
+        in_degree = dict.fromkeys(self.all_files, 0)
         for deps in self.dependencies.values():
             for dep in deps:
                 in_degree[dep] = in_degree.get(dep, 0)  # Ensure it exists
-
-        # Calculate in-degrees (number of files depending on each file)
-        for source, deps in self.dependencies.items():
-            for dep in deps:
-                pass  # We want out-degree for source -> dep direction
 
         # Actually, we want files with no dependencies to come first
         # So we reverse: files that nothing depends on come last
@@ -393,8 +393,8 @@ class CopyResolver:
 
     def __init__(
         self,
-        search_paths: Optional[List[Path]] = None,
-        extensions: Optional[List[str]] = None,
+        search_paths: Optional[list[Path]] = None,
+        extensions: Optional[list[str]] = None,
     ):
         """
         Initialize the COPY resolver.
@@ -406,8 +406,8 @@ class CopyResolver:
         self.search_paths = search_paths or []
         self.extensions = extensions or [".cpy", ".cob", ".cbl", ""]
         self.graph = DependencyGraph()
-        self._copybook_locations: Dict[str, Path] = {}
-        self._scanned_files: Set[str] = set()
+        self._copybook_locations: dict[str, Path] = {}
+        self._scanned_files: set[str] = set()
 
     def add_search_path(self, path: Path) -> None:
         """Add a directory to search for copybooks."""
@@ -457,7 +457,7 @@ class CopyResolver:
         self,
         file_path: Path,
         require_copybooks: bool = False,
-    ) -> List[CopyStatement]:
+    ) -> list[CopyStatement]:
         """
         Scan a file for COPY statements.
 
@@ -480,9 +480,9 @@ class CopyResolver:
 
         # Read file
         try:
-            content = file_path.read_text(encoding='latin-1')
+            content = file_path.read_text(encoding="latin-1")
             lines = content.splitlines()
-        except IOError:
+        except OSError:
             return []
 
         # Find COPY statements
@@ -525,7 +525,7 @@ class CopyResolver:
             for file_path in directory.glob(f"*{ext}"):
                 self.scan_file(file_path, require_copybooks)
 
-    def get_processing_order(self) -> List[str]:
+    def get_processing_order(self) -> list[str]:
         """
         Get files in dependency order for processing.
 
@@ -534,10 +534,10 @@ class CopyResolver:
         """
         return self.graph.topological_sort()
 
-    def get_copy_statements(self, filename: str) -> List[CopyStatement]:
+    def get_copy_statements(self, filename: str) -> list[CopyStatement]:
         """Get all COPY statements in a file."""
         return self.graph.copy_statements.get(filename.upper(), [])
 
-    def get_all_copy_statements(self) -> Dict[str, List[CopyStatement]]:
+    def get_all_copy_statements(self) -> dict[str, list[CopyStatement]]:
         """Get all COPY statements organized by file."""
         return dict(self.graph.copy_statements)

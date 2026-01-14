@@ -4,27 +4,22 @@ Tests for Phase 3.2: PIC Clause Parser.
 Tests for PIC and USAGE clause detection and parsing.
 """
 
-import pytest
-
 from cobol_anonymizer.cobol.pic_parser import (
     PICType,
     UsageType,
-    PICClause,
-    UsageClause,
-    find_pic_clauses,
-    find_usage_clauses,
     calculate_pic_length,
     determine_pic_type,
-    is_in_pic_clause,
-    is_in_usage_clause,
-    get_protected_ranges,
-    is_protected_position,
     extract_pic_from_line,
-    has_value_clause,
-    has_redefines_clause,
-    has_occurs_clause,
+    find_pic_clauses,
+    find_usage_clauses,
+    get_protected_ranges,
     has_external_clause,
     has_global_clause,
+    has_occurs_clause,
+    has_redefines_clause,
+    has_value_clause,
+    is_in_pic_clause,
+    is_protected_position,
 )
 
 

@@ -4,21 +4,22 @@ Tests for Phase 6: COPY Statement Handling.
 Tests for parsing COPY statements and dependency resolution.
 """
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from cobol_anonymizer.cobol.copy_resolver import (
-    ReplacingPair,
+    CopyResolver,
     CopyStatement,
+    DependencyGraph,
+    ReplacingPair,
+    find_copy_statements,
     parse_copy_statement,
     parse_replacing_clause,
-    find_copy_statements,
-    DependencyGraph,
-    CopyResolver,
 )
 from cobol_anonymizer.exceptions import (
-    CopyNotFoundError,
     CircularDependencyError,
+    CopyNotFoundError,
 )
 
 

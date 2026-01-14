@@ -4,20 +4,18 @@ Tests for Phase 3.3: COBOL Tokenizer.
 Tests for tokenizing COBOL source lines.
 """
 
-import pytest
-
 from cobol_anonymizer.core.tokenizer import (
-    TokenType,
     Token,
-    tokenize_line,
-    reconstruct_from_tokens,
+    TokenType,
+    contains_copy_statement,
+    find_token_by_value,
+    get_copy_name,
     get_identifiers,
     get_literals,
-    find_token_by_value,
-    contains_copy_statement,
-    get_copy_name,
     is_data_definition_line,
     is_procedure_statement,
+    reconstruct_from_tokens,
+    tokenize_line,
 )
 
 
