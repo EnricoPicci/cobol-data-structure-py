@@ -18,9 +18,9 @@ from typing import List, Optional
 
 from cobol_anonymizer import __version__
 from cobol_anonymizer.config import Config, create_default_config
-from cobol_anonymizer.core.anonymizer import Anonymizer
+from cobol_anonymizer.main import AnonymizationPipeline
 from cobol_anonymizer.output.validator import OutputValidator
-from cobol_anonymizer.output.report import ReportGenerator, create_summary_report
+from cobol_anonymizer.output.report import create_summary_report
 from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 
@@ -204,6 +204,7 @@ def args_to_config(args: argparse.Namespace) -> Config:
     config.output_dir = args.output
     config.copybook_paths = args.copybook_path or []
     config.mapping_file = args.mapping_file
+    config.load_mappings = args.load_mappings
 
     config.anonymize_programs = not args.no_programs
     config.anonymize_copybooks = not args.no_copybooks
@@ -268,87 +269,58 @@ def run_anonymization(config: Config) -> int:
     Returns:
         Exit code (0 for success, 1 for errors)
     """
-    start_time = time.time()
-
     if not config.quiet:
         print(f"COBOL Anonymizer v{__version__}")
         print(f"Input: {config.input_dir}")
         print(f"Output: {config.output_dir}")
         print()
 
-    try:
-        # Create anonymizer with naming scheme from config
-        anonymizer = Anonymizer(
-            source_directory=config.input_dir,
-            output_directory=config.output_dir if not config.dry_run else None,
-            naming_scheme=config.naming_scheme,
-        )
+    # Define callbacks for verbose/quiet output
+    def on_file_start(file_path, index, total):
+        if config.verbose:
+            print(f"Processing [{index}/{total}] {file_path.name}...")
 
-        # Add copybook search paths
-        for path in config.copybook_paths:
-            anonymizer.copy_resolver.add_search_path(path)
+    def on_file_complete(file_path, result):
+        if config.verbose and result:
+            print(f"  Transformed {result.transformed_lines}/{result.total_lines} lines")
 
-        # Load existing mappings if specified
-        if hasattr(config, 'load_mappings') and config.load_mappings:
-            if config.load_mappings.exists():
-                anonymizer.load_mappings(config.load_mappings)
-                if config.verbose:
-                    print(f"Loaded mappings from {config.load_mappings}")
-
-        # Discover files
+    def on_files_discovered(files):
         if config.verbose:
             print("Discovering files...")
-        files = anonymizer.discover_files()
-
         if not config.quiet:
             print(f"Found {len(files)} files to process")
-
         if config.verbose:
             for f in files:
                 print(f"  {f}")
+        if config.verbose and config.load_mappings and config.load_mappings.exists():
+            print(f"Loaded mappings from {config.load_mappings}")
 
-        # Process files
-        results = []
-        for i, file_path in enumerate(files, 1):
-            if config.verbose:
-                print(f"Processing [{i}/{len(files)}] {file_path.name}...")
+    try:
+        # Use the centralized AnonymizationPipeline
+        pipeline = AnonymizationPipeline(config)
+        result = pipeline.run(
+            on_file_start=on_file_start,
+            on_file_complete=on_file_complete,
+            on_files_discovered=on_files_discovered,
+        )
 
-            # Classify identifiers
-            identifiers = anonymizer.classify_file(file_path)
+        # Handle errors
+        if result.errors:
+            for error in result.errors:
+                print(f"Error: {error}", file=sys.stderr)
+            return 1
 
-            # Build mappings
-            anonymizer.build_mappings(identifiers)
+        # Print mapping file locations
+        if not config.quiet and not config.dry_run and result.mapping_file:
+            print(f"Saved mappings to {result.mapping_file}")
+            print(f"Saved mappings to {result.mapping_file.with_suffix('.csv')}")
 
-            # Transform file
-            if not config.validate_only:
-                result = anonymizer.anonymize_file(file_path)
-                results.append(result)
-
-                if config.verbose:
-                    print(f"  Transformed {result.transformed_lines}/{result.total_lines} lines")
-
-        # Save mappings (default to mappings.json in output directory)
-        if not config.dry_run:
-            mapping_file = config.mapping_file
-            if mapping_file is None:
-                mapping_file = config.output_dir / "mappings.json"
-            anonymizer.save_mappings(mapping_file)
-            if not config.quiet:
-                print(f"Saved mappings to {mapping_file}")
-
-            # Also save CSV version
-            csv_file = mapping_file.with_suffix('.csv')
-            anonymizer.save_mappings_csv(csv_file)
-            if not config.quiet:
-                print(f"Saved mappings to {csv_file}")
-
-        # Generate report
-        elapsed = time.time() - start_time
-        if not config.quiet and results:
-            summary = create_summary_report(results, anonymizer.mapping_table)
+        # Generate and print summary report
+        if not config.quiet and result.file_results:
+            summary = create_summary_report(result.file_results, result.mapping_table)
             print()
             print(summary)
-            print(f"\nCompleted in {elapsed:.2f} seconds")
+            print(f"\nCompleted in {result.processing_time:.2f} seconds")
 
         return 0
 

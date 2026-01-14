@@ -8,7 +8,7 @@ a programmatic API for the anonymization process.
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from cobol_anonymizer.config import Config, create_default_config
 from cobol_anonymizer.core.anonymizer import Anonymizer, FileTransformResult
@@ -18,6 +18,11 @@ from cobol_anonymizer.output.writer import OutputWriter, WriterConfig
 from cobol_anonymizer.output.validator import OutputValidator, ValidationResult
 from cobol_anonymizer.output.report import AnonymizationReport, ReportGenerator
 
+# Type aliases for callbacks
+OnFileStartCallback = Callable[[Path, int, int], None]  # (file_path, index, total)
+OnFileCompleteCallback = Callable[[Path, Optional[FileTransformResult]], None]
+OnFilesDiscoveredCallback = Callable[[List[Path]], None]
+
 
 @dataclass
 class AnonymizationResult:
@@ -25,6 +30,7 @@ class AnonymizationResult:
     success: bool
     file_results: List[FileTransformResult] = field(default_factory=list)
     mapping_table: Optional[MappingTable] = None
+    mapping_file: Optional[Path] = None
     report: Optional[AnonymizationReport] = None
     validation_result: Optional[ValidationResult] = None
     errors: List[str] = field(default_factory=list)
@@ -56,15 +62,20 @@ class AnonymizationPipeline:
 
     def setup(self) -> None:
         """Set up pipeline components."""
-        # Create anonymizer
+        # Create anonymizer with naming scheme from config
         self.anonymizer = Anonymizer(
             source_directory=self.config.input_dir,
             output_directory=self.config.output_dir if not self.config.dry_run else None,
+            naming_scheme=self.config.naming_scheme,
         )
 
         # Add copybook search paths
         for path in self.config.copybook_paths:
             self.anonymizer.copy_resolver.add_search_path(path)
+
+        # Load existing mappings if specified
+        if self.config.load_mappings and self.config.load_mappings.exists():
+            self.anonymizer.load_mappings(self.config.load_mappings)
 
         # Create comment transformer
         comment_mode = CommentMode.ANONYMIZE
@@ -87,9 +98,19 @@ class AnonymizationPipeline:
         # Create validator
         self.validator = OutputValidator()
 
-    def run(self) -> AnonymizationResult:
+    def run(
+        self,
+        on_file_start: Optional[OnFileStartCallback] = None,
+        on_file_complete: Optional[OnFileCompleteCallback] = None,
+        on_files_discovered: Optional[OnFilesDiscoveredCallback] = None,
+    ) -> AnonymizationResult:
         """
         Run the full anonymization pipeline.
+
+        Args:
+            on_file_start: Callback before processing each file (file_path, index, total)
+            on_file_complete: Callback after processing each file (file_path, result)
+            on_files_discovered: Callback after file discovery (list of files)
 
         Returns:
             AnonymizationResult with all details
@@ -111,24 +132,43 @@ class AnonymizationPipeline:
             # Discover files
             files = self.anonymizer.discover_files()
 
+            # Notify about discovered files
+            if on_files_discovered:
+                on_files_discovered(files)
+
             # Process each file
-            for file_path in files:
+            for i, file_path in enumerate(files, 1):
+                # Notify file start
+                if on_file_start:
+                    on_file_start(file_path, i, len(files))
+
                 try:
                     file_result = self._process_file(file_path)
                     if file_result:
                         result.file_results.append(file_result)
+
+                    # Notify file complete
+                    if on_file_complete:
+                        on_file_complete(file_path, file_result)
                 except Exception as e:
                     result.errors.append(f"Error processing {file_path}: {e}")
                     if self.config.verbose:
                         import traceback
                         result.errors.append(traceback.format_exc())
 
-            # Save mappings (JSON and CSV)
-            if self.config.mapping_file and not self.config.dry_run:
-                self.anonymizer.save_mappings(self.config.mapping_file)
+            # Save mappings (JSON and CSV) - use default path if not specified
+            if not self.config.dry_run:
+                mapping_file = self.config.mapping_file
+                if mapping_file is None:
+                    mapping_file = self.config.output_dir / "mappings.json"
+
+                self.anonymizer.save_mappings(mapping_file)
                 # Also save CSV version
-                csv_file = self.config.mapping_file.with_suffix('.csv')
+                csv_file = mapping_file.with_suffix('.csv')
                 self.anonymizer.save_mappings_csv(csv_file)
+
+                # Store the actual mapping file path used
+                result.mapping_file = mapping_file
 
             # Validate output
             if not self.config.dry_run and self.config.output_dir.exists():

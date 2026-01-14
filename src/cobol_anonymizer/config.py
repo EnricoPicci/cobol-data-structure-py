@@ -54,6 +54,7 @@ class Config:
     encoding: str = "latin-1"
     copybook_paths: List[Path] = field(default_factory=list)
     mapping_file: Optional[Path] = None
+    load_mappings: Optional[Path] = None
 
     # Anonymization options
     anonymize_programs: bool = True
@@ -115,6 +116,8 @@ class Config:
             data["output_dir"] = Path(data["output_dir"])
         if "mapping_file" in data and data["mapping_file"]:
             data["mapping_file"] = Path(data["mapping_file"])
+        if "load_mappings" in data and data["load_mappings"]:
+            data["load_mappings"] = Path(data["load_mappings"])
         if "copybook_paths" in data:
             data["copybook_paths"] = [Path(p) for p in data["copybook_paths"]]
 
