@@ -50,6 +50,7 @@ from cobol_anonymizer.generators.comment_generator import (
     CommentConfig,
     CommentMode,
 )
+from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 
 @dataclass
@@ -377,6 +378,7 @@ class Anonymizer:
         source_directory: Optional[Path] = None,
         output_directory: Optional[Path] = None,
         preserve_comments: bool = True,
+        naming_scheme: NamingScheme = NamingScheme.CORPORATE,
     ):
         """
         Initialize the anonymizer.
@@ -385,12 +387,14 @@ class Anonymizer:
             source_directory: Directory containing original files
             output_directory: Directory for anonymized output
             preserve_comments: If True, keep comments (may still anonymize content)
+            naming_scheme: The naming scheme for anonymized identifiers
         """
         self.source_directory = source_directory
         self.output_directory = output_directory
         self.preserve_comments = preserve_comments
+        self.naming_scheme = naming_scheme
 
-        self.mapping_table = MappingTable()
+        self.mapping_table = MappingTable(_naming_scheme=naming_scheme)
         self.copy_resolver = CopyResolver()
         self.redefines_tracker = RedefinesTracker()
 

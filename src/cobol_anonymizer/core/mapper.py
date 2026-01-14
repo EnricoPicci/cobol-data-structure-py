@@ -20,6 +20,7 @@ from cobol_anonymizer.generators.name_generator import (
     NameGenerator,
     NameGeneratorConfig,
 )
+from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 
 @dataclass
@@ -81,15 +82,24 @@ class MappingTable:
     Usage:
         table = MappingTable()
         anon_name = table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+
+        # With a different naming scheme:
+        table = MappingTable(_naming_scheme=NamingScheme.ANIMALS)
+        anon_name = table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+        # -> "FLUFFY-LLAMA-1"
     """
     _mappings: Dict[str, MappingEntry] = field(default_factory=dict)
     _external_names: Set[str] = field(default_factory=set)
     _generator: NameGenerator = field(default_factory=NameGenerator)
     _preserve_length: bool = True
+    _naming_scheme: NamingScheme = NamingScheme.CORPORATE
 
     def __post_init__(self):
-        # Configure the generator
-        config = NameGeneratorConfig(preserve_length=self._preserve_length)
+        # Configure the generator with naming scheme
+        config = NameGeneratorConfig(
+            preserve_length=self._preserve_length,
+            naming_scheme=self._naming_scheme,
+        )
         self._generator = NameGenerator(config=config)
 
     def get_or_create(
@@ -246,6 +256,7 @@ class MappingTable:
         """Convert to dictionary for JSON serialization."""
         return {
             "generated_at": datetime.now().isoformat(),
+            "naming_scheme": self._naming_scheme.value,
             "mappings": [e.to_dict() for e in self._mappings.values()],
             "external_names": list(self._external_names),
             "generator_state": {
@@ -260,6 +271,8 @@ class MappingTable:
         Args:
             path: Path to save the JSON file
         """
+        # Ensure the parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
         data = self.to_dict()
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
@@ -278,7 +291,14 @@ class MappingTable:
         with open(path, 'r') as f:
             data = json.load(f)
 
-        table = cls()
+        # Restore naming scheme (default to NUMERIC for backward compatibility)
+        scheme_value = data.get("naming_scheme", "numeric")
+        try:
+            naming_scheme = NamingScheme(scheme_value)
+        except ValueError:
+            naming_scheme = NamingScheme.NUMERIC
+
+        table = cls(_naming_scheme=naming_scheme)
 
         # Load mappings
         for entry_data in data.get("mappings", []):

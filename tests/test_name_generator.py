@@ -13,6 +13,7 @@ from cobol_anonymizer.generators.name_generator import (
     NAME_PREFIXES,
     NameGenerator,
     NameGeneratorConfig,
+    NamingScheme,
     generate_anonymized_name,
     validate_generated_name,
 )
@@ -42,27 +43,31 @@ class TestNameGenerator:
     """Tests for NameGenerator class."""
 
     def test_generate_data_name(self):
-        """Generate data name with correct prefix."""
-        gen = NameGenerator()
+        """Generate data name with correct prefix (numeric scheme)."""
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.NUMERIC)
+        gen = NameGenerator(config=config)
         name = gen.generate("WS-CUSTOMER-NAME", IdentifierType.DATA_NAME)
         assert name.startswith("D")
         assert len(name) == len("WS-CUSTOMER-NAME")
 
     def test_generate_program_name(self):
-        """Generate program name with PG prefix."""
-        gen = NameGenerator()
+        """Generate program name with PG prefix (numeric scheme)."""
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.NUMERIC)
+        gen = NameGenerator(config=config)
         name = gen.generate("TESTPROG", IdentifierType.PROGRAM_NAME)
         assert name.startswith("PG")
 
     def test_generate_copybook_name(self):
-        """Generate copybook name with CP prefix."""
-        gen = NameGenerator()
+        """Generate copybook name with CP prefix (numeric scheme)."""
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.NUMERIC)
+        gen = NameGenerator(config=config)
         name = gen.generate("COPYBOOK", IdentifierType.COPYBOOK_NAME)
         assert name.startswith("CP")
 
     def test_generate_paragraph_name(self):
-        """Generate paragraph name with PA prefix."""
-        gen = NameGenerator()
+        """Generate paragraph name with PA prefix (numeric scheme)."""
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.NUMERIC)
+        gen = NameGenerator(config=config)
         name = gen.generate("A001-INIT", IdentifierType.PARAGRAPH_NAME)
         assert name.startswith("PA")
 
@@ -76,8 +81,9 @@ class TestNameGenerator:
             names.add(name)
 
     def test_length_preservation(self):
-        """Generated name matches original length (up to 30)."""
-        gen = NameGenerator()
+        """Generated name matches original length (up to 30) with numeric scheme."""
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.NUMERIC)
+        gen = NameGenerator(config=config)
 
         # Short name
         short_name = gen.generate("ABC", IdentifierType.DATA_NAME)
@@ -101,8 +107,9 @@ class TestNameGenerator:
             assert not name.startswith("-")
 
     def test_zero_padded_counter(self):
-        """Counter is zero-padded in generated names."""
-        gen = NameGenerator()
+        """Counter is zero-padded in generated names (numeric scheme)."""
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.NUMERIC)
+        gen = NameGenerator(config=config)
         name = gen.generate("WS-FIELD", IdentifierType.DATA_NAME)
         # Name should be like "D0000001" not "D1"
         assert "0" in name

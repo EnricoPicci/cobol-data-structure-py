@@ -3,8 +3,8 @@ COBOL Name Generator - Generates anonymized identifier names.
 
 This module generates unique, valid COBOL identifiers for anonymization.
 Key features:
-- Type-specific prefixes (PG, CP, SC, PA, D, C, FL, IX)
-- Zero-padded counters (no hyphens in generated names)
+- Multiple naming schemes (numeric, animals, food, fantasy, corporate)
+- Type-specific prefixes for numeric scheme (PG, CP, SC, PA, D, C, FL, IX)
 - Length preservation up to 30 characters
 - Reserved word collision avoidance
 - Deterministic generation with optional seed
@@ -21,22 +21,17 @@ from cobol_anonymizer.exceptions import (
     ReservedWordCollisionError,
     IdentifierLengthError,
 )
+from cobol_anonymizer.generators.naming_schemes import (
+    NamingScheme,
+    BaseNamingStrategy,
+    get_naming_strategy,
+    NAME_PREFIXES,
+)
 
 
-# Type-specific prefixes for generated names
-# Short prefixes maximize available digits for counter
-NAME_PREFIXES: Dict[IdentifierType, str] = {
-    IdentifierType.PROGRAM_NAME: "PG",
-    IdentifierType.COPYBOOK_NAME: "CP",
-    IdentifierType.SECTION_NAME: "SC",
-    IdentifierType.PARAGRAPH_NAME: "PA",
-    IdentifierType.DATA_NAME: "D",
-    IdentifierType.CONDITION_NAME: "C",
-    IdentifierType.FILE_NAME: "FL",
-    IdentifierType.INDEX_NAME: "IX",
-    IdentifierType.EXTERNAL_NAME: "EX",  # Should not be used normally
-    IdentifierType.UNKNOWN: "X",
-}
+# Re-export NAME_PREFIXES for backward compatibility
+# (imported from naming_schemes module)
+__all__ = ['NameGenerator', 'NameGeneratorConfig', 'NAME_PREFIXES', 'NamingScheme']
 
 
 @dataclass
@@ -49,11 +44,13 @@ class NameGeneratorConfig:
         min_length: Minimum length for generated names
         max_length: Maximum length (COBOL limit is 30)
         seed: Random seed for deterministic generation
+        naming_scheme: The naming scheme to use (default: NUMERIC)
     """
     preserve_length: bool = True
     min_length: int = 4
     max_length: int = MAX_IDENTIFIER_LENGTH
     seed: Optional[int] = None
+    naming_scheme: NamingScheme = NamingScheme.CORPORATE
 
 
 @dataclass
@@ -64,13 +61,23 @@ class NameGenerator:
     Usage:
         generator = NameGenerator()
         new_name = generator.generate("WS-CUSTOMER-NAME", IdentifierType.DATA_NAME)
+
+        # With a different naming scheme:
+        config = NameGeneratorConfig(naming_scheme=NamingScheme.ANIMALS)
+        generator = NameGenerator(config=config)
+        new_name = generator.generate("WS-CUSTOMER-NAME", IdentifierType.DATA_NAME)
+        # -> "FLUFFY-LLAMA-1"
     """
     config: NameGeneratorConfig = field(default_factory=NameGeneratorConfig)
     _counters: Dict[IdentifierType, int] = field(default_factory=dict)
     _generated_names: Set[str] = field(default_factory=set)
     _random: Optional[random.Random] = None
+    _strategy: Optional[BaseNamingStrategy] = field(default=None, init=False)
 
     def __post_init__(self):
+        # Initialize naming strategy based on config
+        self._strategy = get_naming_strategy(self.config.naming_scheme)
+
         if self.config.seed is not None:
             self._random = random.Random(self.config.seed)
 
@@ -91,7 +98,7 @@ class NameGenerator:
         Returns:
             A unique, valid COBOL identifier
         """
-        # Get the prefix for this type
+        # Get the prefix for this type (used for minimum length calculation)
         prefix = NAME_PREFIXES.get(id_type, "X")
 
         # Determine target length
@@ -106,16 +113,16 @@ class NameGenerator:
         length = max(length, self.config.min_length)
         length = max(length, len(prefix) + 1)  # At least prefix + 1 digit
 
-        # Calculate available digits for counter
-        available_digits = length - len(prefix)
-
         # Get next counter value for this type
         counter = self._get_next_counter(id_type)
 
-        # Generate the name
+        # Generate the name using the strategy
         max_retries = 1000
         for attempt in range(max_retries):
-            name = self._format_name(prefix, counter, available_digits)
+            # Delegate to the naming strategy
+            name = self._strategy.generate_name(
+                original_name, id_type, counter, length
+            )
 
             # Validate the generated name
             if self._is_valid_name(name):

@@ -435,3 +435,204 @@ class TestAnonymizationResult:
         )
         assert not result.success
         assert len(result.errors) == 2
+
+
+class TestMappingsFileGeneration:
+    """Tests for mappings.json file generation."""
+
+    def test_mappings_file_generated_by_default(self, tmp_path):
+        """Mappings file is generated in output directory by default."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TESTPROG.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-FIELD PIC X(10).
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           STOP RUN.
+""")
+
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--quiet",
+        ])
+
+        assert result == 0
+        mappings_file = output_dir / "mappings.json"
+        assert mappings_file.exists(), "mappings.json should be created by default"
+
+        # Verify it's valid JSON with expected structure
+        mappings_data = json.loads(mappings_file.read_text())
+        assert "mappings" in mappings_data
+        assert "external_names" in mappings_data
+        assert "generated_at" in mappings_data
+
+    def test_mappings_file_with_custom_path(self, tmp_path):
+        """Mappings file is saved to custom path when specified."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        custom_mappings = tmp_path / "custom_mappings.json"
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TESTPROG.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-FIELD PIC X(10).
+""")
+
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--mapping-file", str(custom_mappings),
+            "--quiet",
+        ])
+
+        assert result == 0
+        assert custom_mappings.exists(), "mappings should be saved to custom path"
+        # Default location should not exist
+        default_mappings = output_dir / "mappings.json"
+        assert not default_mappings.exists()
+
+    def test_mappings_file_not_generated_in_dry_run(self, tmp_path):
+        """Mappings file is not generated in dry-run mode."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       01 WS-FIELD PIC X(10).
+""")
+
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--dry-run",
+            "--quiet",
+        ])
+
+        assert result == 0
+        mappings_file = output_dir / "mappings.json"
+        assert not mappings_file.exists(), "mappings.json should not be created in dry-run"
+
+    def test_mappings_file_contains_anonymized_names(self, tmp_path):
+        """Mappings file contains original to anonymized name mappings."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        # Create a COBOL file with identifiable names
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       IDENTIFICATION DIVISION.
+       PROGRAM-ID. MYPROG.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 CUSTOMER-NAME PIC X(30).
+       01 ACCOUNT-NUMBER PIC 9(10).
+       PROCEDURE DIVISION.
+       INIT-PROCESS.
+           STOP RUN.
+""")
+
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--quiet",
+        ])
+
+        assert result == 0
+        mappings_file = output_dir / "mappings.json"
+        mappings_data = json.loads(mappings_file.read_text())
+
+        # Check that mappings exist
+        assert len(mappings_data["mappings"]) > 0
+
+        # Find original names in mappings
+        original_names = {m["original_name"].upper() for m in mappings_data["mappings"]}
+        assert "CUSTOMER-NAME" in original_names
+        assert "ACCOUNT-NUMBER" in original_names
+
+    def test_mappings_file_with_naming_scheme(self, tmp_path):
+        """Mappings file works with different naming schemes."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       01 WS-TEST-FIELD PIC X(10).
+""")
+
+        # Test with numeric scheme
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--naming-scheme", "numeric",
+            "--quiet",
+        ])
+
+        assert result == 0
+        mappings_file = output_dir / "mappings.json"
+        mappings_data = json.loads(mappings_file.read_text())
+
+        # With numeric scheme, names should start with type prefix
+        for mapping in mappings_data["mappings"]:
+            anon_name = mapping["anonymized_name"]
+            # Numeric scheme produces names like D0000001, PG000001, etc.
+            assert anon_name[0].isalpha()
+
+    def test_mappings_file_with_animals_scheme(self, tmp_path):
+        """Mappings file with animals naming scheme."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       01 WS-CUSTOMER-DATA PIC X(20).
+""")
+
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--naming-scheme", "animals",
+            "--quiet",
+        ])
+
+        assert result == 0
+        mappings_file = output_dir / "mappings.json"
+        assert mappings_file.exists()
+        mappings_data = json.loads(mappings_file.read_text())
+        assert len(mappings_data["mappings"]) > 0
+
+    def test_mappings_file_with_corporate_scheme(self, tmp_path):
+        """Mappings file with corporate naming scheme (default)."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        test_file = input_dir / "test.cob"
+        test_file.write_text("""       01 WS-ACCOUNT-INFO PIC X(15).
+""")
+
+        result = main([
+            "--input", str(input_dir),
+            "--output", str(output_dir),
+            "--naming-scheme", "corporate",
+            "--quiet",
+        ])
+
+        assert result == 0
+        mappings_file = output_dir / "mappings.json"
+        assert mappings_file.exists()
+        mappings_data = json.loads(mappings_file.read_text())
+        assert len(mappings_data["mappings"]) > 0

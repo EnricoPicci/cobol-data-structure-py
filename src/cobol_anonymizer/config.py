@@ -10,8 +10,11 @@ This module handles:
 
 import json
 from dataclasses import dataclass, field, asdict
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 
 @dataclass
@@ -41,6 +44,7 @@ class Config:
         verbose: Enable verbose output
         quiet: Suppress normal output
         seed: Random seed for deterministic output
+        naming_scheme: Naming scheme for anonymized identifiers
         log_level: Logging level
         overwrite: Overwrite existing output files
     """
@@ -73,6 +77,7 @@ class Config:
     verbose: bool = False
     quiet: bool = False
     seed: Optional[int] = None
+    naming_scheme: NamingScheme = NamingScheme.CORPORATE
     log_level: str = "INFO"
     overwrite: bool = False
 
@@ -84,6 +89,8 @@ class Config:
                 data[key] = str(value)
             elif isinstance(value, list) and value and isinstance(value[0], Path):
                 data[key] = [str(p) for p in value]
+            elif isinstance(value, Enum):
+                data[key] = value.value
             else:
                 data[key] = value
         return data
@@ -110,6 +117,14 @@ class Config:
             data["mapping_file"] = Path(data["mapping_file"])
         if "copybook_paths" in data:
             data["copybook_paths"] = [Path(p) for p in data["copybook_paths"]]
+
+        # Convert naming_scheme string to enum
+        if "naming_scheme" in data and isinstance(data["naming_scheme"], str):
+            try:
+                data["naming_scheme"] = NamingScheme(data["naming_scheme"])
+            except ValueError:
+                # Invalid scheme, fall back to default
+                data["naming_scheme"] = NamingScheme.NUMERIC
 
         # Filter only known fields
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}

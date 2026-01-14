@@ -21,6 +21,7 @@ from cobol_anonymizer.config import Config, create_default_config
 from cobol_anonymizer.core.anonymizer import Anonymizer
 from cobol_anonymizer.output.validator import OutputValidator
 from cobol_anonymizer.output.report import ReportGenerator, create_summary_report
+from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -168,6 +169,19 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--naming-scheme",
+        type=str,
+        choices=["numeric", "animals", "food", "fantasy", "corporate"],
+        default="corporate",
+        help="Naming scheme for anonymized identifiers: "
+             "numeric (e.g., D00000001), "
+             "animals (e.g., FLUFFY-LLAMA-1), "
+             "food (e.g., SPICY-TACO-1), "
+             "fantasy (e.g., SNEAKY-DRAGON-1), "
+             "corporate (default, e.g., AGILE-SYNERGY-1)",
+    )
+
+    parser.add_argument(
         "--encoding",
         default="latin-1",
         help="File encoding (default: latin-1)",
@@ -205,6 +219,7 @@ def args_to_config(args: argparse.Namespace) -> Config:
     config.quiet = args.quiet
     config.overwrite = args.overwrite
     config.seed = args.seed
+    config.naming_scheme = NamingScheme(args.naming_scheme)
     config.encoding = args.encoding
 
     # Load config file if provided
@@ -262,10 +277,11 @@ def run_anonymization(config: Config) -> int:
         print()
 
     try:
-        # Create anonymizer
+        # Create anonymizer with naming scheme from config
         anonymizer = Anonymizer(
             source_directory=config.input_dir,
             output_directory=config.output_dir if not config.dry_run else None,
+            naming_scheme=config.naming_scheme,
         )
 
         # Add copybook search paths
@@ -311,11 +327,14 @@ def run_anonymization(config: Config) -> int:
                 if config.verbose:
                     print(f"  Transformed {result.transformed_lines}/{result.total_lines} lines")
 
-        # Save mappings
-        if config.mapping_file and not config.dry_run:
-            anonymizer.save_mappings(config.mapping_file)
+        # Save mappings (default to mappings.json in output directory)
+        if not config.dry_run:
+            mapping_file = config.mapping_file
+            if mapping_file is None:
+                mapping_file = config.output_dir / "mappings.json"
+            anonymizer.save_mappings(mapping_file)
             if not config.quiet:
-                print(f"Saved mappings to {config.mapping_file}")
+                print(f"Saved mappings to {mapping_file}")
 
         # Generate report
         elapsed = time.time() - start_time
