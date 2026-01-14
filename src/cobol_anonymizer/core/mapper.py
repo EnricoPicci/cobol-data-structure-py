@@ -9,6 +9,7 @@ This module provides a global mapping table that:
 - Provides persistence via JSON export/import
 """
 
+import csv
 import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -276,6 +277,69 @@ class MappingTable:
         data = self.to_dict()
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
+
+    def save_to_csv(self, path: Path) -> None:
+        """
+        Save mapping table to CSV file.
+
+        The CSV contains one row per mapping entry with columns:
+        original_name, anonymized_name, id_type, is_external,
+        first_seen_file, first_seen_line, occurrence_count,
+        naming_scheme, generated_at
+
+        Args:
+            path: Path to save the CSV file
+        """
+        # Ensure the parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().isoformat()
+        scheme_name = self._naming_scheme.value
+
+        with open(path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+
+            # Write header
+            writer.writerow([
+                'original_name',
+                'anonymized_name',
+                'id_type',
+                'is_external',
+                'first_seen_file',
+                'first_seen_line',
+                'occurrence_count',
+                'naming_scheme',
+                'generated_at',
+            ])
+
+            # Write mapping entries
+            for entry in self._mappings.values():
+                writer.writerow([
+                    entry.original_name,
+                    entry.anonymized_name,
+                    entry.id_type.name,
+                    str(entry.is_external).lower(),
+                    entry.first_seen_file or '',
+                    entry.first_seen_line if entry.first_seen_line is not None else '',
+                    entry.occurrence_count,
+                    scheme_name,
+                    timestamp,
+                ])
+
+            # Write external names that weren't already in mappings
+            for ext_name in self._external_names:
+                if ext_name not in self._mappings:
+                    writer.writerow([
+                        ext_name,
+                        ext_name,  # External names keep original
+                        'EXTERNAL_NAME',
+                        'true',
+                        '',
+                        '',
+                        0,
+                        scheme_name,
+                        timestamp,
+                    ])
 
     @classmethod
     def load_from_file(cls, path: Path) -> "MappingTable":

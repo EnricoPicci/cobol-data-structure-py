@@ -626,6 +626,10 @@ class Anonymizer:
         """Save mappings to a JSON file."""
         self.mapping_table.save_to_file(path)
 
+    def save_mappings_csv(self, path: Path) -> None:
+        """Save mappings to a CSV file."""
+        self.mapping_table.save_to_csv(path)
+
     def load_mappings(self, path: Path) -> None:
         """Load mappings from a JSON file."""
         self.mapping_table = MappingTable.load_from_file(path)

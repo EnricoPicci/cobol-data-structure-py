@@ -1,8 +1,16 @@
 # CSV Export Implementation Plan
 
+**Status: IMPLEMENTED** (2026-01-14)
+
 ## Overview
 
 This document describes the plan to add CSV export functionality for the mappings file, complementing the existing JSON export.
+
+The feature is now implemented:
+- `MappingTable.save_to_csv()` method in `core/mapper.py`
+- `Anonymizer.save_mappings_csv()` method in `core/anonymizer.py`
+- CLI automatically generates both `mappings.json` and `mappings.csv`
+- 12 comprehensive tests in `tests/test_csv_export.py`
 
 ## Current mappings.json Structure
 

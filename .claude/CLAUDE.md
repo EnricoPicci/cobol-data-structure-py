@@ -200,7 +200,7 @@ Support parameterized COPY statements with identifier substitution.
 
 ### Debugging Anonymization
 Use `--dry-run --verbose` to see what would be changed without writing files.
-The mapping file (`--mapping-file`) shows all identifier mappings as JSON.
+The mapping file (`--mapping-file`) shows all identifier mappings as JSON and CSV (both formats are generated automatically).
 
 ## Don'ts
 

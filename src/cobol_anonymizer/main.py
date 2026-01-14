@@ -123,9 +123,12 @@ class AnonymizationPipeline:
                         import traceback
                         result.errors.append(traceback.format_exc())
 
-            # Save mappings
+            # Save mappings (JSON and CSV)
             if self.config.mapping_file and not self.config.dry_run:
                 self.anonymizer.save_mappings(self.config.mapping_file)
+                # Also save CSV version
+                csv_file = self.config.mapping_file.with_suffix('.csv')
+                self.anonymizer.save_mappings_csv(csv_file)
 
             # Validate output
             if not self.config.dry_run and self.config.output_dir.exists():

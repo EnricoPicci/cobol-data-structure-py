@@ -336,6 +336,12 @@ def run_anonymization(config: Config) -> int:
             if not config.quiet:
                 print(f"Saved mappings to {mapping_file}")
 
+            # Also save CSV version
+            csv_file = mapping_file.with_suffix('.csv')
+            anonymizer.save_mappings_csv(csv_file)
+            if not config.quiet:
+                print(f"Saved mappings to {csv_file}")
+
         # Generate report
         elapsed = time.time() - start_time
         if not config.quiet and results:
