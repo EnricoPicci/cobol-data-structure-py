@@ -349,7 +349,8 @@ def is_protected_position(line: str, position: int) -> bool:
     Returns:
         True if the position is protected
     """
-    return is_in_pic_clause(line, position) or is_in_usage_clause(line, position)
+    ranges = get_protected_ranges(line)
+    return any(start <= position < end for start, end in ranges)
 
 
 def extract_pic_from_line(line: str) -> Optional[str]:
@@ -368,6 +369,25 @@ def extract_pic_from_line(line: str) -> Optional[str]:
     return None
 
 
+def _has_clause(line: str, clause_name: str, require_trailing_space: bool = True) -> bool:
+    """
+    Generic helper to check if a line contains a specific COBOL clause.
+
+    Args:
+        line: The COBOL line to check
+        clause_name: The clause keyword to search for (e.g., "VALUE", "REDEFINES")
+        require_trailing_space: If True, requires whitespace after clause name
+
+    Returns:
+        True if the clause is present
+    """
+    if require_trailing_space:
+        pattern = rf'\b{clause_name}\s+'
+    else:
+        pattern = rf'\b{clause_name}\b'
+    return bool(re.search(pattern, line, re.IGNORECASE))
+
+
 def has_value_clause(line: str) -> bool:
     """
     Check if the line contains a VALUE clause.
@@ -381,7 +401,7 @@ def has_value_clause(line: str) -> bool:
     Returns:
         True if a VALUE clause is present
     """
-    return bool(re.search(r'\bVALUE\s+(?:IS\s+)?', line, re.IGNORECASE))
+    return _has_clause(line, "VALUE")
 
 
 def has_redefines_clause(line: str) -> bool:
@@ -394,7 +414,7 @@ def has_redefines_clause(line: str) -> bool:
     Returns:
         True if a REDEFINES clause is present
     """
-    return bool(re.search(r'\bREDEFINES\s+', line, re.IGNORECASE))
+    return _has_clause(line, "REDEFINES")
 
 
 def has_occurs_clause(line: str) -> bool:
@@ -407,7 +427,7 @@ def has_occurs_clause(line: str) -> bool:
     Returns:
         True if an OCCURS clause is present
     """
-    return bool(re.search(r'\bOCCURS\s+', line, re.IGNORECASE))
+    return _has_clause(line, "OCCURS")
 
 
 def has_external_clause(line: str) -> bool:
@@ -423,7 +443,7 @@ def has_external_clause(line: str) -> bool:
     Returns:
         True if an EXTERNAL clause is present
     """
-    return bool(re.search(r'\bEXTERNAL\b', line, re.IGNORECASE))
+    return _has_clause(line, "EXTERNAL", require_trailing_space=False)
 
 
 def has_global_clause(line: str) -> bool:
@@ -436,4 +456,4 @@ def has_global_clause(line: str) -> bool:
     Returns:
         True if a GLOBAL clause is present
     """
-    return bool(re.search(r'\bGLOBAL\b', line, re.IGNORECASE))
+    return _has_clause(line, "GLOBAL", require_trailing_space=False)

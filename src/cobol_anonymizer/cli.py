@@ -196,6 +196,34 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def _print_issues(
+    issues: List,
+    label: str,
+    limit: int = 10,
+    file=None,
+    prefix: str = "  ",
+) -> None:
+    """
+    Print a list of issues with optional limit.
+
+    Args:
+        issues: List of issues to print
+        label: Label for the section (e.g., "Errors", "Warnings")
+        limit: Maximum number of issues to show (0 for unlimited)
+        file: Output file (default: stdout)
+        prefix: Prefix for each issue line
+    """
+    if not issues:
+        return
+
+    print(f"\n{label} ({len(issues)}):", file=file)
+    display_issues = issues[:limit] if limit > 0 else issues
+    for issue in display_issues:
+        print(f"{prefix}{issue}", file=file)
+    if limit > 0 and len(issues) > limit:
+        print(f"{prefix}... and {len(issues) - limit} more", file=file)
+
+
 def args_to_config(args: argparse.Namespace) -> Config:
     """Convert parsed arguments to Config object."""
     config = create_default_config()
@@ -248,16 +276,8 @@ def run_validation(config: Config) -> int:
 
     if not config.quiet:
         print(f"Validated {result.files_validated} files, {result.lines_validated} lines")
-        if result.errors:
-            print(f"\nErrors ({len(result.errors)}):")
-            for error in result.errors:
-                print(f"  {error}")
-        if result.warnings:
-            print(f"\nWarnings ({len(result.warnings)}):")
-            for warning in result.warnings[:10]:  # Limit to first 10
-                print(f"  {warning}")
-            if len(result.warnings) > 10:
-                print(f"  ... and {len(result.warnings) - 10} more")
+        _print_issues(result.errors, "Errors", limit=0)
+        _print_issues(result.warnings, "Warnings", limit=10)
 
     return 0 if result.is_valid else 1
 
@@ -306,8 +326,7 @@ def run_anonymization(config: Config) -> int:
 
         # Handle errors
         if result.errors:
-            for error in result.errors:
-                print(f"Error: {error}", file=sys.stderr)
+            _print_issues(result.errors, "Errors", limit=0, file=sys.stderr, prefix="  ")
             return 1
 
         # Print mapping file locations

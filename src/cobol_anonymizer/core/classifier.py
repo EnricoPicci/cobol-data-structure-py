@@ -160,6 +160,57 @@ class IdentifierClassifier:
         self.identifiers: List[ClassifiedIdentifier] = []
         self.seen_definitions: Set[str] = set()
 
+    def _get_first_non_whitespace(self, tokens: List[Token]) -> Optional[Token]:
+        """Get the first non-whitespace token from a token list."""
+        for token in tokens:
+            if token.type != TokenType.WHITESPACE:
+                return token
+        return None
+
+    def _find_token_after_keyword(
+        self,
+        tokens: List[Token],
+        keywords: Set[str],
+        expected_types: Optional[Set[TokenType]] = None,
+        substring_match: bool = False,
+    ) -> Optional[Token]:
+        """
+        Find the first matching token after a keyword.
+
+        Args:
+            tokens: List of tokens to search
+            keywords: Set of keyword values to look for (uppercase)
+            expected_types: Optional set of expected token types after keyword
+            substring_match: If True, check if any keyword is contained in token value
+
+        Returns:
+            The token found after the keyword, or None
+        """
+        if expected_types is None:
+            expected_types = {TokenType.IDENTIFIER, TokenType.RESERVED}
+
+        found_keyword = False
+        for token in tokens:
+            if token.type == TokenType.WHITESPACE:
+                continue
+            if found_keyword:
+                if token.type in expected_types:
+                    return token
+                # Skip punctuation (like periods after keywords) and continue looking
+                if token.type == TokenType.PUNCTUATION:
+                    continue
+                return None  # Found non-matching, non-punctuation token after keyword
+            # Check if this token is the keyword
+            if token.type in (TokenType.RESERVED, TokenType.IDENTIFIER):
+                token_upper = token.value.upper()
+                if substring_match:
+                    if any(kw in token_upper for kw in keywords):
+                        found_keyword = True
+                else:
+                    if token_upper in keywords:
+                        found_keyword = True
+        return None
+
     def classify_line(
         self,
         line: str,
@@ -293,11 +344,8 @@ class IdentifierClassifier:
 
     def _is_data_definition(self, tokens: List[Token]) -> bool:
         """Check if line is a data definition."""
-        for token in tokens:
-            if token.type == TokenType.WHITESPACE:
-                continue
-            return token.type == TokenType.LEVEL_NUMBER
-        return False
+        first_token = self._get_first_non_whitespace(tokens)
+        return first_token is not None and first_token.type == TokenType.LEVEL_NUMBER
 
     def _classify_program_id(
         self,
@@ -305,26 +353,17 @@ class IdentifierClassifier:
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify PROGRAM-ID identifier."""
-        found_program_id = False
-        for token in tokens:
-            if token.type == TokenType.WHITESPACE:
-                continue
-            if found_program_id:
-                if token.type in (TokenType.IDENTIFIER, TokenType.RESERVED):
-                    name = token.value.upper()
-                    self.seen_definitions.add(name)
-                    return ClassifiedIdentifier(
-                        name=token.value,
-                        type=IdentifierType.PROGRAM_NAME,
-                        line_number=line_number,
-                        context="PROGRAM-ID declaration",
-                        is_definition=True,
-                    )
-            if token.type == TokenType.RESERVED and "PROGRAM-ID" in token.value.upper():
-                found_program_id = True
-            elif token.type == TokenType.IDENTIFIER and "PROGRAM-ID" in token.value.upper():
-                # PROGRAM-ID might be tokenized as identifier
-                found_program_id = True
+        # PROGRAM-ID can be tokenized as one token or split, so use substring match
+        token = self._find_token_after_keyword(tokens, {"PROGRAM-ID"}, substring_match=True)
+        if token:
+            self.seen_definitions.add(token.value.upper())
+            return ClassifiedIdentifier(
+                name=token.value,
+                type=IdentifierType.PROGRAM_NAME,
+                line_number=line_number,
+                context="PROGRAM-ID declaration",
+                is_definition=True,
+            )
         return None
 
     def _classify_copy_statement(
@@ -333,21 +372,15 @@ class IdentifierClassifier:
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify COPY statement copybook name."""
-        found_copy = False
-        for token in tokens:
-            if token.type == TokenType.WHITESPACE:
-                continue
-            if found_copy:
-                if token.type in (TokenType.IDENTIFIER, TokenType.RESERVED):
-                    return ClassifiedIdentifier(
-                        name=token.value,
-                        type=IdentifierType.COPYBOOK_NAME,
-                        line_number=line_number,
-                        context="COPY statement",
-                        is_definition=False,
-                    )
-            if token.type == TokenType.RESERVED and token.value.upper() == "COPY":
-                found_copy = True
+        token = self._find_token_after_keyword(tokens, {"COPY"})
+        if token:
+            return ClassifiedIdentifier(
+                name=token.value,
+                type=IdentifierType.COPYBOOK_NAME,
+                line_number=line_number,
+                context="COPY statement",
+                is_definition=False,
+            )
         return None
 
     def _classify_fd_declaration(
@@ -356,23 +389,19 @@ class IdentifierClassifier:
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify FD/SD file name."""
-        found_fd = False
-        for token in tokens:
-            if token.type == TokenType.WHITESPACE:
-                continue
-            if found_fd:
-                if token.type == TokenType.IDENTIFIER:
-                    self.context.current_fd_name = token.value
-                    self.seen_definitions.add(token.value.upper())
-                    return ClassifiedIdentifier(
-                        name=token.value,
-                        type=IdentifierType.FILE_NAME,
-                        line_number=line_number,
-                        context="FD/SD declaration",
-                        is_definition=True,
-                    )
-            if token.type == TokenType.RESERVED and token.value.upper() in ("FD", "SD"):
-                found_fd = True
+        token = self._find_token_after_keyword(
+            tokens, {"FD", "SD"}, expected_types={TokenType.IDENTIFIER}
+        )
+        if token:
+            self.context.current_fd_name = token.value
+            self.seen_definitions.add(token.value.upper())
+            return ClassifiedIdentifier(
+                name=token.value,
+                type=IdentifierType.FILE_NAME,
+                line_number=line_number,
+                context="FD/SD declaration",
+                is_definition=True,
+            )
         return None
 
     def _classify_section_header(
@@ -381,20 +410,17 @@ class IdentifierClassifier:
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify SECTION name."""
-        for token in tokens:
-            if token.type == TokenType.WHITESPACE:
-                continue
-            if token.type == TokenType.IDENTIFIER:
-                self.context.last_section = token.value
-                self.seen_definitions.add(token.value.upper())
-                return ClassifiedIdentifier(
-                    name=token.value,
-                    type=IdentifierType.SECTION_NAME,
-                    line_number=line_number,
-                    context="PROCEDURE DIVISION section",
-                    is_definition=True,
-                )
-            break
+        first_token = self._get_first_non_whitespace(tokens)
+        if first_token and first_token.type == TokenType.IDENTIFIER:
+            self.context.last_section = first_token.value
+            self.seen_definitions.add(first_token.value.upper())
+            return ClassifiedIdentifier(
+                name=first_token.value,
+                type=IdentifierType.SECTION_NAME,
+                line_number=line_number,
+                context="PROCEDURE DIVISION section",
+                is_definition=True,
+            )
         return None
 
     def _classify_paragraph(
@@ -403,20 +429,17 @@ class IdentifierClassifier:
         line_number: int,
     ) -> Optional[ClassifiedIdentifier]:
         """Classify paragraph name."""
-        for token in tokens:
-            if token.type == TokenType.WHITESPACE:
-                continue
-            if token.type == TokenType.IDENTIFIER:
-                self.context.last_paragraph = token.value
-                self.seen_definitions.add(token.value.upper())
-                return ClassifiedIdentifier(
-                    name=token.value,
-                    type=IdentifierType.PARAGRAPH_NAME,
-                    line_number=line_number,
-                    context="PROCEDURE DIVISION paragraph",
-                    is_definition=True,
-                )
-            break
+        first_token = self._get_first_non_whitespace(tokens)
+        if first_token and first_token.type == TokenType.IDENTIFIER:
+            self.context.last_paragraph = first_token.value
+            self.seen_definitions.add(first_token.value.upper())
+            return ClassifiedIdentifier(
+                name=first_token.value,
+                type=IdentifierType.PARAGRAPH_NAME,
+                line_number=line_number,
+                context="PROCEDURE DIVISION paragraph",
+                is_definition=True,
+            )
         return None
 
     def _classify_data_definition(

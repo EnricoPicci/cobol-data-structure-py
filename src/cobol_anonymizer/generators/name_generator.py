@@ -26,6 +26,8 @@ from cobol_anonymizer.generators.naming_schemes import (
     BaseNamingStrategy,
     get_naming_strategy,
     NAME_PREFIXES,
+    get_prefix_for_type,
+    format_numeric_name,
 )
 
 
@@ -141,30 +143,6 @@ class NameGenerator:
         self._counters[id_type] += 1
         return self._counters[id_type]
 
-    def _format_name(self, prefix: str, counter: int, available_digits: int) -> str:
-        """
-        Format a name with zero-padded counter.
-
-        Args:
-            prefix: The type prefix (e.g., "D", "PG")
-            counter: The counter value
-            available_digits: Number of digits available
-
-        Returns:
-            Formatted name like "D0000001" or "PG000001"
-        """
-        if available_digits < 1:
-            return f"{prefix}1"
-
-        # Zero-pad the counter to fill available space
-        counter_str = str(counter).zfill(available_digits)
-
-        # If counter is too large, just use it without padding
-        if len(counter_str) > available_digits:
-            counter_str = str(counter)
-
-        return f"{prefix}{counter_str}"
-
     def _is_valid_name(self, name: str) -> bool:
         """
         Check if a generated name is valid.
@@ -225,7 +203,7 @@ def generate_anonymized_name(
     Returns:
         An anonymized name
     """
-    prefix = NAME_PREFIXES.get(id_type, "X")
+    prefix = get_prefix_for_type(id_type)
 
     if preserve_length:
         target_length = min(len(original_name), MAX_IDENTIFIER_LENGTH)
@@ -233,13 +211,7 @@ def generate_anonymized_name(
         target_length = MAX_IDENTIFIER_LENGTH
 
     target_length = max(target_length, len(prefix) + 1)
-    available_digits = target_length - len(prefix)
-
-    counter_str = str(counter).zfill(available_digits)
-    if len(counter_str) > available_digits:
-        counter_str = str(counter)
-
-    return f"{prefix}{counter_str}"
+    return format_numeric_name(prefix, counter, target_length)
 
 
 def validate_generated_name(name: str) -> None:

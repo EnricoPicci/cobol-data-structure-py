@@ -34,6 +34,40 @@ NAME_PREFIXES: Dict[IdentifierType, str] = {
 }
 
 
+def get_prefix_for_type(id_type: IdentifierType) -> str:
+    """Get the naming prefix for an identifier type."""
+    return NAME_PREFIXES.get(id_type, "X")
+
+
+def format_numeric_name(prefix: str, counter: int, target_length: int) -> str:
+    """
+    Format a numeric name with zero-padded counter.
+
+    This is the canonical implementation for numeric name formatting used
+    across the codebase.
+
+    Args:
+        prefix: The type prefix (e.g., "D", "PG")
+        counter: The counter value
+        target_length: Total target length for the name
+
+    Returns:
+        Formatted name like "D00000001" or "PG000001"
+    """
+    available_digits = target_length - len(prefix)
+
+    if available_digits < 1:
+        return f"{prefix}{counter}"
+
+    counter_str = str(counter).zfill(available_digits)
+
+    # If counter overflows available digits, just use unpadded
+    if len(counter_str) > available_digits:
+        counter_str = str(counter)
+
+    return f"{prefix}{counter_str}"
+
+
 class NamingScheme(str, Enum):
     """Available naming schemes for identifier anonymization."""
     NUMERIC = "numeric"
@@ -89,19 +123,8 @@ class NumericNamingStrategy(BaseNamingStrategy):
         target_length: int
     ) -> str:
         """Generate a numeric name like D00000001."""
-        prefix = NAME_PREFIXES.get(id_type, "X")
-        available_digits = target_length - len(prefix)
-
-        if available_digits < 1:
-            return f"{prefix}{counter}"
-
-        counter_str = str(counter).zfill(available_digits)
-
-        # If counter overflows available digits, just use unpadded
-        if len(counter_str) > available_digits:
-            counter_str = str(counter)
-
-        return f"{prefix}{counter_str}"
+        prefix = get_prefix_for_type(id_type)
+        return format_numeric_name(prefix, counter, target_length)
 
     def get_scheme(self) -> NamingScheme:
         return NamingScheme.NUMERIC
@@ -159,11 +182,8 @@ class WordBasedNamingStrategy(BaseNamingStrategy):
         target_length: int
     ) -> str:
         """Fall back to numeric scheme when word-based cannot fit."""
-        prefix = NAME_PREFIXES.get(id_type, "X")
-        available_digits = target_length - len(prefix)
-        if available_digits < 1:
-            return f"{prefix}{counter}"
-        return f"{prefix}{str(counter).zfill(available_digits)}"
+        prefix = get_prefix_for_type(id_type)
+        return format_numeric_name(prefix, counter, target_length)
 
     def _hash_name(self, name: str) -> int:
         """

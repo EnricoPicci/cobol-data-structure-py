@@ -200,8 +200,8 @@ class AnonymizationPipeline:
         except Exception as e:
             result.success = False
             result.errors.append(f"Pipeline error: {e}")
+            result.processing_time = time.time() - start_time
 
-        result.processing_time = time.time() - start_time
         return result
 
     def _process_file(self, file_path: Path) -> Optional[FileTransformResult]:

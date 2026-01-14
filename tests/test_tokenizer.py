@@ -10,7 +10,6 @@ from cobol_anonymizer.core.tokenizer import (
     TokenType,
     Token,
     tokenize_line,
-    tokenize_code_area,
     reconstruct_from_tokens,
     get_identifiers,
     get_literals,

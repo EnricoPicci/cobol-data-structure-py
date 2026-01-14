@@ -53,6 +53,14 @@ from cobol_anonymizer.generators.comment_generator import (
 from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 
+# Pre-compiled regex pattern for REDEFINES clause parsing
+# Pattern: level_number name REDEFINES target_name
+REDEFINES_PATTERN = re.compile(
+    r'(\d+)\s+([A-Za-z][A-Za-z0-9\-]*)\s+REDEFINES\s+([A-Za-z][A-Za-z0-9\-]*)',
+    re.IGNORECASE
+)
+
+
 @dataclass
 class RedefinesEntry:
     """Tracks a REDEFINES relationship."""
@@ -275,12 +283,7 @@ class LineTransformer:
 
     def _handle_redefines(self, code_area: str, line_number: int) -> None:
         """Extract and track REDEFINES relationship."""
-        # Pattern: level name REDEFINES target
-        match = re.search(
-            r'(\d+)\s+([A-Za-z][A-Za-z0-9\-]*)\s+REDEFINES\s+([A-Za-z][A-Za-z0-9\-]*)',
-            code_area,
-            re.IGNORECASE
-        )
+        match = REDEFINES_PATTERN.search(code_area)
         if match:
             level = int(match.group(1))
             redefining = match.group(2)
@@ -465,20 +468,13 @@ class Anonymizer:
         definitions = [i for i in identifiers if i.is_definition]
 
         for ident in definitions:
-            # Don't map EXTERNAL items
-            if ident.is_external or ident.type == IdentifierType.EXTERNAL_NAME:
-                self.mapping_table.mark_external(ident.name)
-                self.mapping_table.get_or_create(
-                    ident.name,
-                    ident.type,
-                    is_external=True,
-                )
-            else:
-                self.mapping_table.get_or_create(
-                    ident.name,
-                    ident.type,
-                    is_external=False,
-                )
+            # Determine if this is an EXTERNAL item (should not be anonymized)
+            is_external = ident.is_external or ident.type == IdentifierType.EXTERNAL_NAME
+            self.mapping_table.get_or_create(
+                ident.name,
+                ident.type,
+                is_external=is_external,
+            )
 
     def transform_file(self, file_path: Path) -> FileTransformResult:
         """

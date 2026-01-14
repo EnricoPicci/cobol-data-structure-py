@@ -122,7 +122,6 @@ def tokenize_line(
     line: str,
     line_number: int = 1,
     is_comment: bool = False,
-    is_continuation: bool = False,
 ) -> List[Token]:
     """
     Tokenize a COBOL source line.
@@ -131,7 +130,6 @@ def tokenize_line(
         line: The code area content to tokenize (columns 8-72)
         line_number: The line number for context
         is_comment: Whether this is a comment line
-        is_continuation: Whether this is a continuation line
 
     Returns:
         List of Token objects
@@ -286,19 +284,6 @@ def tokenize_line(
             pos = match.end()
             continue
 
-        # Numeric literals (standalone numbers)
-        match = NUMERIC_LITERAL_PATTERN.match(line, pos)
-        if match:
-            tokens.append(Token(
-                type=TokenType.LITERAL_NUMERIC,
-                value=match.group(),
-                start_pos=pos,
-                end_pos=match.end(),
-                line_number=line_number,
-            ))
-            pos = match.end()
-            continue
-
         # Numeric literals (standalone numbers after identifiers have been checked)
         match = NUMERIC_LITERAL_PATTERN.match(line, pos)
         if match:
@@ -323,27 +308,6 @@ def tokenize_line(
         pos += 1
 
     return tokens
-
-
-def tokenize_code_area(
-    code: str,
-    line_number: int = 1,
-    is_comment: bool = False,
-) -> List[Token]:
-    """
-    Tokenize the code area (columns 8-72) of a COBOL line.
-
-    This is a convenience wrapper around tokenize_line.
-
-    Args:
-        code: The code area content
-        line_number: Line number for context
-        is_comment: Whether this is a comment line
-
-    Returns:
-        List of tokens
-    """
-    return tokenize_line(code, line_number, is_comment)
 
 
 def reconstruct_from_tokens(tokens: List[Token]) -> str:
