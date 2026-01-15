@@ -155,8 +155,15 @@ cobol-data-structure-py/
 
 ## Documentation
 
-- [Design Document](docs/DESIGN.md) - Architecture and design decisions
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) - Development phases
+- [Design Document](docs/01-DESIGN.md) - Architecture and design decisions
+- [Implementation Plan](docs/01-IMPLEMENTATION_PLAN.md) - Development phases
+- [Funny Naming Schemes Plan](docs/04-FUNNY_NAMING_SCHEMES_PLAN.md) - Alternative naming scheme implementation
+- [CSV Export Plan](docs/08-CSV_EXPORT_PLAN.md) - CSV mapping export functionality
+- [CLI/Main Refactoring](docs/10-CLI_MAIN_REFACTORING.md) - CLI and main module refactoring
+- [Refactoring Opportunities](docs/11-REFACTORING_OPPORTUNITIES.md) - Code simplification opportunities
+- [Project Organization Gaps](docs/13-PROJECT_ORGANIZATION_GAPS.md) - Project structure improvements
+- [Test Coverage Analysis](docs/14-TEST_COVERAGE_ANALYSIS.md) - Test coverage configuration
+- [CLAUDE.md Update Recommendations](docs/14-CLAUDE_MD_UPDATE_RECOMMENDATIONS.md) - AI guidance updates
 - [CLAUDE.md](.claude/CLAUDE.md) - AI assistant guidance
 
 ## CLI Options

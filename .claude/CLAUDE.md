@@ -48,6 +48,14 @@ README.md           # User documentation
 CONTRIBUTING.md     # Contributor guidelines
 ```
 
+## Documentation Naming Convention
+
+When creating documents in the `docs/` folder in response to prompts from `prompts_for_claude_code/`:
+- Prefix the document name with the prompt number (e.g., `15-DOCUMENT_NAME.md`)
+- The prefix should match the prompt that triggered the document creation
+- Check `prompts_for_claude_code/` for the current highest prompt number
+- Add the new document to the "## Documentation" section of `README.md`
+
 ## Architecture
 
 ### Processing Pipeline (4 phases)
