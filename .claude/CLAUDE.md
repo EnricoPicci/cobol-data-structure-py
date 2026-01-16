@@ -4,6 +4,20 @@
 
 **COBOL Anonymizer** is a Python tool that automatically anonymizes COBOL source code while preserving exact logical equivalence and structure. It transforms customer-specific COBOL code into generic, non-identifiable code suitable for public distribution.
 
+## Mandatory Development Rules
+
+**IMPORTANT: These rules MUST be followed for every code change.**
+
+1. **Always Add Tests**: After every code change, add or update tests to cover the new or modified functionality. Run `pytest` to verify all tests pass before considering the change complete.
+
+2. **Always Update Documentation**: After every code change, update relevant documentation:
+   - Update docstrings for modified functions/classes
+   - Update README.md if user-facing behavior changes
+   - Update this CLAUDE.md if architecture or conventions change
+   - Add or update docs/ files for significant features
+
+A change is NOT complete until both tests and documentation are updated.
+
 ## Quick Commands
 
 ```bash
