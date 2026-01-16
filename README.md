@@ -164,6 +164,9 @@ cobol-data-structure-py/
 - [Project Organization Gaps](docs/13-PROJECT_ORGANIZATION_GAPS.md) - Project structure improvements
 - [Test Coverage Analysis](docs/14-TEST_COVERAGE_ANALYSIS.md) - Test coverage configuration
 - [CLAUDE.md Update Recommendations](docs/14-CLAUDE_MD_UPDATE_RECOMMENDATIONS.md) - AI guidance updates
+- [File Name Anonymization Strategy](docs/16-FILE_NAME_ANONYMIZATION_STRATEGY.md) - Strategy for anonymizing COBOL file names
+- [File Name Anonymization Plan](docs/16-FILE_NAME_ANONYMIZATION_PLAN.md) - Implementation plan for file name anonymization
+- [Anonymization Gaps Analysis](docs/16-ANONYMIZATION_GAPS_ANALYSIS.md) - Analysis of gaps in anonymization logic
 - [CLAUDE.md](.claude/CLAUDE.md) - AI assistant guidance
 
 ## CLI Options
