@@ -186,9 +186,7 @@ class LiteralAnonymizer:
         """
         self.scheme = scheme
         self.rng = random.Random(seed)
-        self.adjectives, self.nouns = _SCHEME_WORDS.get(
-            scheme, _SCHEME_WORDS[NamingScheme.ANIMALS]
-        )
+        self.adjectives, self.nouns = _SCHEME_WORDS.get(scheme, _SCHEME_WORDS[NamingScheme.ANIMALS])
         self._word_index = 0
 
     def anonymize_literal(self, original: str) -> str:

@@ -15,12 +15,12 @@ from pathlib import Path
 from typing import Optional
 
 from cobol_anonymizer.cobol.column_handler import (
+    BLANK_SEQUENCE,
     COBOLFormat,
     COBOLLine,
     detect_cobol_format,
-    parse_file_line,
+    has_sequence_content,
     parse_file_line_auto,
-    parse_line,
     parse_line_auto,
     validate_code_area,
 )
@@ -154,6 +154,7 @@ class LineTransformer:
         preserve_external: bool = False,
         literal_anonymizer: Optional[LiteralAnonymizer] = None,
         anonymize_literals: bool = True,
+        clean_sequence_area: bool = True,
     ):
         """
         Initialize the transformer.
@@ -165,6 +166,7 @@ class LineTransformer:
             preserve_external: If True, keep EXTERNAL item names unchanged
             literal_anonymizer: Optional anonymizer for string literals
             anonymize_literals: Whether to anonymize string literals (default: True)
+            clean_sequence_area: If True (default), replace columns 1-6 with spaces
         """
         self.mapping_table = mapping_table
         self.redefines_tracker = redefines_tracker or RedefinesTracker()
@@ -172,6 +174,7 @@ class LineTransformer:
         self.preserve_external = preserve_external
         self.literal_anonymizer = literal_anonymizer
         self.anonymize_literals = anonymize_literals
+        self.clean_sequence_area = clean_sequence_area
 
     def transform_line(
         self,
@@ -196,11 +199,23 @@ class LineTransformer:
             transformed_line, comment_result = self.comment_transformer.transform_line(
                 cobol_line.raw
             )
+            changes_made = list(comment_result.changes_made)
+
+            # Clean sequence area for comment lines too (fixed format only)
+            if (
+                self.clean_sequence_area
+                and cobol_line.source_format != COBOLFormat.FREE
+                and has_sequence_content(cobol_line.sequence)
+            ):
+                # Replace sequence area with spaces in the transformed line
+                transformed_line = BLANK_SEQUENCE + transformed_line[6:]
+                changes_made.append(("sequence", "cleaned"))
+
             return TransformResult(
                 original_line=cobol_line.raw,
                 transformed_line=transformed_line,
                 line_number=cobol_line.line_number,
-                changes_made=comment_result.changes_made,
+                changes_made=changes_made,
                 is_comment=True,
             )
 
@@ -263,25 +278,37 @@ class LineTransformer:
                 if new_code_area != code_area and not changes:
                     changes.append(("literals", "anonymized"))
 
-        if changes:
-            # Validate column boundaries
-            try:
-                # Create a temporary line with the new code area
-                temp_line = COBOLLine(
-                    raw=cobol_line.raw,
-                    line_number=cobol_line.line_number,
-                    sequence=cobol_line.sequence,
-                    indicator=cobol_line.indicator,
-                    area_a=new_code_area[:4].ljust(4),
-                    area_b=new_code_area[4:].ljust(61),
-                    identification=cobol_line.identification,
-                    original_length=cobol_line.original_length,
-                    line_ending=cobol_line.line_ending,
-                    has_change_tag=cobol_line.has_change_tag,
-                )
-                validate_code_area(temp_line, filename, new_code_area)
-            except ColumnOverflowError as e:
-                warnings.append(f"Column overflow at line {cobol_line.line_number}: {e}")
+        # Check if sequence area needs cleaning (even if no other changes)
+        needs_sequence_cleanup = (
+            self.clean_sequence_area
+            and has_sequence_content(cobol_line.sequence)
+            and cobol_line.source_format != COBOLFormat.FREE
+        )
+
+        if changes or needs_sequence_cleanup:
+            # Validate column boundaries if code area changed
+            if changes:
+                try:
+                    # Create a temporary line with the new code area
+                    temp_line = COBOLLine(
+                        raw=cobol_line.raw,
+                        line_number=cobol_line.line_number,
+                        sequence=cobol_line.sequence,
+                        indicator=cobol_line.indicator,
+                        area_a=new_code_area[:4].ljust(4),
+                        area_b=new_code_area[4:].ljust(61),
+                        identification=cobol_line.identification,
+                        original_length=cobol_line.original_length,
+                        line_ending=cobol_line.line_ending,
+                        has_change_tag=cobol_line.has_change_tag,
+                    )
+                    validate_code_area(temp_line, filename, new_code_area)
+                except ColumnOverflowError as e:
+                    warnings.append(f"Column overflow at line {cobol_line.line_number}: {e}")
+
+            # Track sequence cleanup as a change if it's the only change
+            if needs_sequence_cleanup and not changes:
+                changes.append(("sequence", "cleaned"))
 
             # Build the new line
             transformed = self._build_transformed_line(cobol_line, new_code_area)
@@ -357,7 +384,7 @@ class LineTransformer:
                     anon_name = self.mapping_table.get_anonymized_name(program_name)
                     if anon_name and anon_name.upper() != program_name.upper():
                         # Replace the token value with anonymized name (keep quotes)
-                        token.value = f'{quote_char}{anon_name}{quote_char}'
+                        token.value = f"{quote_char}{anon_name}{quote_char}"
                         changes.append((original_literal, token.value))
 
                 # Only process the first literal after CALL
@@ -422,9 +449,14 @@ class LineTransformer:
         if len(new_code_area) < 65:
             new_code_area = new_code_area.ljust(65)
 
+        # Determine sequence area: clean if option enabled and has content
+        sequence = original.sequence
+        if self.clean_sequence_area and has_sequence_content(original.sequence):
+            sequence = BLANK_SEQUENCE
+
         # Reconstruct with sequence, indicator, areas, and identification
         full_line = (
-            original.sequence
+            sequence
             + original.indicator
             + new_code_area[:4]  # Area A
             + new_code_area[4:65]  # Area B
@@ -476,6 +508,7 @@ class Anonymizer:
         preserve_external: bool = False,
         anonymize_literals: bool = True,
         seed: Optional[int] = None,
+        clean_sequence_area: bool = True,
     ):
         """
         Initialize the anonymizer.
@@ -488,6 +521,7 @@ class Anonymizer:
             preserve_external: If True, keep EXTERNAL item names unchanged
             anonymize_literals: If True (default), anonymize string literal contents
             seed: Optional seed for deterministic output
+            clean_sequence_area: If True (default), replace columns 1-6 with spaces
         """
         self.source_directory = source_directory
         self.output_directory = output_directory
@@ -496,6 +530,7 @@ class Anonymizer:
         self.preserve_external = preserve_external
         self.anonymize_literals = anonymize_literals
         self.seed = seed
+        self.clean_sequence_area = clean_sequence_area
 
         self.mapping_table = MappingTable(
             _naming_scheme=naming_scheme,
@@ -612,6 +647,7 @@ class Anonymizer:
             preserve_external=self.preserve_external,
             literal_anonymizer=self.literal_anonymizer,
             anonymize_literals=self.anonymize_literals,
+            clean_sequence_area=self.clean_sequence_area,
         )
 
         results = []

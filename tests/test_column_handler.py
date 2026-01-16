@@ -753,3 +753,51 @@ class TestSourceFormatField:
         line_fixed = "       01  WS-FIELD."
         parsed_fixed = parse_line_auto(line_fixed, detected_format=COBOLFormat.FIXED)
         assert parsed_fixed.source_format == COBOLFormat.FIXED
+
+
+class TestSequenceAreaCleanup:
+    """Tests for sequence area cleanup functions."""
+
+    def test_has_sequence_content_with_numbers(self):
+        """Sequence numbers are detected as content."""
+        from cobol_anonymizer.cobol.column_handler import has_sequence_content
+
+        assert has_sequence_content("000100") is True
+        assert has_sequence_content("123456") is True
+
+    def test_has_sequence_content_with_change_tag(self):
+        """Change tags are detected as content."""
+        from cobol_anonymizer.cobol.column_handler import has_sequence_content
+
+        assert has_sequence_content("BENIQ ") is True
+        assert has_sequence_content("REPLAT") is True
+        assert has_sequence_content("CDR   ") is True
+
+    def test_has_sequence_content_blank(self):
+        """Blank sequence area has no content."""
+        from cobol_anonymizer.cobol.column_handler import has_sequence_content
+
+        assert has_sequence_content("      ") is False
+        assert has_sequence_content("") is False
+
+    def test_has_sequence_content_mixed(self):
+        """Mixed content is detected as content."""
+        from cobol_anonymizer.cobol.column_handler import has_sequence_content
+
+        assert has_sequence_content("AB1234") is True
+        assert has_sequence_content("  XX  ") is True
+
+    def test_clean_sequence_returns_blanks(self):
+        """clean_sequence returns 6 spaces."""
+        from cobol_anonymizer.cobol.column_handler import clean_sequence
+
+        assert clean_sequence("000100") == "      "
+        assert clean_sequence("BENIQ ") == "      "
+        assert len(clean_sequence("123456")) == 6
+
+    def test_blank_sequence_constant(self):
+        """BLANK_SEQUENCE is 6 spaces."""
+        from cobol_anonymizer.cobol.column_handler import BLANK_SEQUENCE
+
+        assert BLANK_SEQUENCE == "      "
+        assert len(BLANK_SEQUENCE) == 6

@@ -74,7 +74,7 @@ This project uses **token-based processing with pattern recognition**, not AST p
 
 ### Column Structure (Fixed Format)
 COBOL uses 80-column fixed format:
-- **Cols 1-6**: Sequence/change tags (preserved as-is)
+- **Cols 1-6**: Sequence/change tags (cleaned by default, use `--preserve-sequence-area` to keep)
 - **Col 7**: Indicator (`*` comment, `-` continuation, `D` debug)
 - **Cols 8-11**: Area A (divisions, sections, level numbers)
 - **Cols 12-72**: Area B (actual code)
@@ -131,6 +131,8 @@ config = Config(
     # anonymize_literals=False - string literals keep original content (--protect-literals)
     # preserve_external=False (default) - EXTERNAL items are anonymized
     # preserve_external=True - EXTERNAL items keep original names
+    # clean_sequence_area=True (default) - columns 1-6 replaced with spaces
+    # clean_sequence_area=False - sequence area preserved (--preserve-sequence-area)
 )
 ```
 
@@ -196,8 +198,8 @@ Same input must always produce identical output:
 - Use MD5 hashing for word-based schemes
 - Support `--seed` for reproducibility
 
-### Change Tags Preservation
-Non-numeric content in columns 1-6 (like `REPLAT`) are change tags that must be preserved exactly.
+### Sequence Area Handling (Columns 1-6)
+By default, columns 1-6 (sequence numbers and change tags like `REPLAT`) are replaced with spaces in the anonymized output. Use `--preserve-sequence-area` to keep them unchanged.
 
 ### Multi-line Constructs
 Handle VALUE clauses and other constructs that span multiple lines with continuation markers.

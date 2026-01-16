@@ -38,6 +38,7 @@ class Config:
         anonymize_literals: Anonymize string literal contents (default: True, use --protect-literals to disable)
         strip_comments: Remove comment content entirely
         preserve_external: Keep EXTERNAL item names unchanged (default: False - anonymize them)
+        clean_sequence_area: Clean columns 1-6 (sequence numbers/identification tags) by replacing with spaces (default: True)
         validate_columns: Validate column 72 limit
         validate_identifiers: Validate identifier length
         dry_run: Don't write output files
@@ -68,6 +69,7 @@ class Config:
     anonymize_literals: bool = True
     strip_comments: bool = False
     preserve_external: bool = False
+    clean_sequence_area: bool = True  # Clean columns 1-6 (sequence numbers/tags) by default
 
     # Validation options
     validate_columns: bool = True

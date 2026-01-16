@@ -75,6 +75,7 @@ class AnonymizationPipeline:
             preserve_external=self.config.preserve_external,
             anonymize_literals=self.config.anonymize_literals,
             seed=self.config.seed,
+            clean_sequence_area=self.config.clean_sequence_area,
         )
 
         # Add copybook search paths

@@ -595,7 +595,7 @@ class CommentTransformer:
             Tuple of (transformed line, result details)
         """
         stripped = line.lstrip()
-        leading_spaces = line[:len(line) - len(stripped)]
+        leading_spaces = line[: len(line) - len(stripped)]
 
         # Determine the comment prefix (*> or *)
         if stripped.startswith("*>"):

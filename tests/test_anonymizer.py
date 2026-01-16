@@ -933,3 +933,250 @@ class TestDisplayLiteralAnonymization:
         assert "Default message" not in value_line
         # VALUE keyword should still be there
         assert "VALUE" in value_line
+
+
+class TestSequenceAreaCleanup:
+    """Tests for cleaning sequence area (columns 1-6)."""
+
+    def test_clean_sequence_numbers(self):
+        """Sequence numbers are cleaned when clean_sequence_area=True."""
+        table = MappingTable()
+        table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # Line with sequence numbers in columns 1-6
+        parsed = parse_line("000100 05 WS-FIELD PIC X.", 1)
+        result = transformer.transform_line(parsed)
+
+        # Sequence area should be cleaned (replaced with spaces)
+        assert result.transformed_line.startswith("      ")
+        # The sequence "000100" should not be present
+        assert "000100" not in result.transformed_line
+
+    def test_clean_change_tags(self):
+        """Change tags (like REPLAT) are cleaned when clean_sequence_area=True."""
+        table = MappingTable()
+        table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # Line with change tag in columns 1-6
+        parsed = parse_line("REPLAT 05 WS-FIELD PIC X.", 1)
+        result = transformer.transform_line(parsed)
+
+        # Change tag should be cleaned
+        assert result.transformed_line.startswith("      ")
+        assert "REPLAT" not in result.transformed_line
+
+    def test_clean_sequence_by_default(self):
+        """Sequence numbers are cleaned by default (clean_sequence_area=True)."""
+        table = MappingTable()
+        table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+
+        # Default behavior: clean sequence area
+        transformer = LineTransformer(table)  # Uses default clean_sequence_area=True
+        parsed = parse_line("000100 05 WS-FIELD PIC X.", 1)
+        result = transformer.transform_line(parsed)
+
+        # Sequence area should be cleaned
+        assert result.transformed_line.startswith("      ")
+
+    def test_preserve_sequence_when_disabled(self):
+        """Sequence numbers are preserved when clean_sequence_area=False."""
+        table = MappingTable()
+        table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+
+        # Explicitly disable cleaning
+        transformer = LineTransformer(table, clean_sequence_area=False)
+        parsed = parse_line("000100 05 WS-FIELD PIC X.", 1)
+        result = transformer.transform_line(parsed)
+
+        # Sequence area should be preserved
+        assert result.transformed_line.startswith("000100")
+
+    def test_clean_sequence_no_identifier_changes(self):
+        """Sequence cleaned even when no identifiers change."""
+        table = MappingTable()
+        # Don't add any mappings - just FILLER
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # Line with FILLER (won't be anonymized) but has sequence number
+        parsed = parse_line("123456 05 FILLER PIC X(10).", 1)
+        result = transformer.transform_line(parsed)
+
+        # Sequence should still be cleaned
+        assert result.transformed_line.startswith("      ")
+        assert "123456" not in result.transformed_line
+        # Changes should record the sequence cleanup
+        assert any("sequence" in change[0].lower() for change in result.changes_made)
+
+    def test_blank_sequence_not_changed(self):
+        """Lines with blank sequence area don't have unnecessary changes."""
+        table = MappingTable()
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # Line with already blank sequence
+        parsed = parse_line("       05 FILLER PIC X.", 1)
+        result = transformer.transform_line(parsed)
+
+        # No changes should be recorded if sequence was already blank
+        assert "sequence" not in str(result.changes_made).lower()
+
+    def test_clean_sequence_preserves_code_area(self):
+        """Cleaning sequence area doesn't affect code area."""
+        table = MappingTable()
+        table.get_or_create("WS-CUSTOMER-NAME", IdentifierType.DATA_NAME)
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        parsed = parse_line("000200 01 WS-CUSTOMER-NAME PIC X(30).", 1)
+        result = transformer.transform_line(parsed)
+
+        # Code area should still be transformed
+        assert "PIC X(30)" in result.transformed_line
+        # Original identifier should be replaced
+        assert "WS-CUSTOMER-NAME" not in result.transformed_line
+
+    def test_clean_sequence_80_column_line(self):
+        """Clean sequence area on 80-column line preserves length."""
+        table = MappingTable()
+        table.get_or_create("WS-RECORD", IdentifierType.DATA_NAME)
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # 80-column line with sequence number and identification area
+        line = "000100       01 WS-RECORD                                                   TEST"
+        assert len(line) == 80
+        parsed = parse_line(line, 1)
+        result = transformer.transform_line(parsed)
+
+        # Length should be preserved
+        assert len(result.transformed_line) == 80
+        # Sequence cleaned, identification preserved
+        assert result.transformed_line[:6] == "      "
+        # The identification area should be preserved as-is
+        assert "TEST" in result.transformed_line[72:]
+
+    def test_clean_sequence_comment_lines(self):
+        """Sequence area is cleaned for comment lines too."""
+        table = MappingTable()
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # Comment line with sequence number
+        parsed = parse_line("000100*THIS IS A COMMENT", 1)
+        assert parsed.is_comment
+        result = transformer.transform_line(parsed)
+
+        # Sequence should be cleaned even for comments
+        assert result.transformed_line[:6] == "      "
+        assert "000100" not in result.transformed_line
+        # Comment indicator should still be present
+        assert result.transformed_line[6] == "*"
+
+    def test_clean_sequence_comment_with_change_tag(self):
+        """Change tags in comment lines are cleaned."""
+        table = MappingTable()
+
+        transformer = LineTransformer(table, clean_sequence_area=True)
+        # Comment line with change tag
+        parsed = parse_line("REPLAT*MODIFIED COMMENT", 1)
+        assert parsed.is_comment
+        result = transformer.transform_line(parsed)
+
+        # Change tag should be cleaned
+        assert result.transformed_line[:6] == "      "
+        assert "REPLAT" not in result.transformed_line
+
+
+class TestAnonymizerCleanSequence:
+    """Tests for Anonymizer class with clean_sequence_area option."""
+
+    def test_anonymizer_clean_sequence(self, tmp_path):
+        """Anonymizer with clean_sequence_area removes sequence numbers."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "000100       IDENTIFICATION DIVISION.\n"
+            "000200       PROGRAM-ID. TEST.\n"
+            "000300       DATA DIVISION.\n"
+            "000400       WORKING-STORAGE SECTION.\n"
+            "000500       01 WS-DATA PIC X.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            clean_sequence_area=True,
+        )
+
+        result = anon.anonymize_file(program)
+
+        # All lines should have cleaned sequence area
+        for change in result.changes:
+            transformed = change.transformed_line
+            # First 6 characters should be spaces (cleaned)
+            assert transformed[:6] == "      ", f"Sequence not cleaned: {transformed[:10]}"
+
+    def test_anonymizer_clean_sequence_with_change_tags(self, tmp_path):
+        """Anonymizer removes change tags from sequence area."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "BENIQ        IDENTIFICATION DIVISION.\n"
+            "REPLAT       PROGRAM-ID. TEST.\n"
+            "CDR          DATA DIVISION.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            clean_sequence_area=True,
+        )
+
+        result = anon.anonymize_file(program)
+
+        # All change tags should be cleaned
+        for change in result.changes:
+            transformed = change.transformed_line
+            assert "BENIQ" not in transformed
+            assert "REPLAT" not in transformed
+            assert "CDR" not in transformed
+
+    def test_anonymizer_clean_sequence_with_comments(self, tmp_path):
+        """Anonymizer cleans sequence area for comment lines too."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "000100       IDENTIFICATION DIVISION.\n"
+            "000200      *THIS IS A COMMENT LINE\n"
+            "000300       PROGRAM-ID. TEST.\n"
+            "REPLAT      *ANOTHER COMMENT WITH CHANGE TAG\n"
+            "000500       PROCEDURE DIVISION.\n"
+            "000600      *FINAL COMMENT\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            clean_sequence_area=True,
+        )
+
+        result = anon.anonymize_file(program)
+
+        # All lines (including comments) should have cleaned sequence area
+        for change in result.changes:
+            transformed = change.transformed_line
+            # First 6 characters should be spaces (cleaned)
+            assert transformed[:6] == "      ", f"Sequence not cleaned: {transformed[:20]}"
+
+        # Verify sequence numbers and change tags are not in output
+        all_transformed = "\n".join(c.transformed_line for c in result.changes)
+        assert "000100" not in all_transformed
+        assert "000200" not in all_transformed
+        assert "000300" not in all_transformed
+        assert "REPLAT" not in all_transformed
+        assert "000500" not in all_transformed
+        assert "000600" not in all_transformed

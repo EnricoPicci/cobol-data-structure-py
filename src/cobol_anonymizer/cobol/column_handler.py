@@ -157,6 +157,40 @@ def detect_change_tag(sequence: str) -> Optional[str]:
     return None
 
 
+# Blank sequence area for cleaning
+BLANK_SEQUENCE = " " * 6
+
+
+def has_sequence_content(sequence: str) -> bool:
+    """
+    Check if the sequence area has content that should be cleaned.
+
+    This includes:
+    - Sequence numbers (all digits)
+    - Identification tags (any non-blank content)
+
+    Args:
+        sequence: The 6-character sequence area (columns 1-6)
+
+    Returns:
+        True if the sequence area has content that should be cleaned
+    """
+    return sequence.strip() != ""
+
+
+def clean_sequence(sequence: str) -> str:
+    """
+    Return a cleaned (blank) sequence area.
+
+    Args:
+        sequence: The original 6-character sequence area
+
+    Returns:
+        A 6-character string of spaces
+    """
+    return BLANK_SEQUENCE
+
+
 def parse_line(line: str, line_number: int = 1, line_ending: str = "\n") -> COBOLLine:
     """
     Parse a COBOL source line into its column components.
@@ -438,9 +472,7 @@ def detect_cobol_format(lines: list[str]) -> COBOLFormat:
         return COBOLFormat.FIXED
 
 
-def parse_line_free_format(
-    line: str, line_number: int = 1, line_ending: str = "\n"
-) -> COBOLLine:
+def parse_line_free_format(line: str, line_number: int = 1, line_ending: str = "\n") -> COBOLLine:
     """
     Parse a COBOL source line in free format.
 

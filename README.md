@@ -103,7 +103,7 @@ print(f"Mappings saved to {result.mapping_file}")
 - COBOL reserved words
 - Numeric literals
 - Column structure (sequence, indicator, areas)
-- Change tags in columns 1-6
+- Sequence numbers and change tags in columns 1-6 (only when using `--preserve-sequence-area`)
 - String literals (when using `--protect-literals`)
 
 ## Development
@@ -189,6 +189,7 @@ Options:
   --strip-comments         Remove comment content entirely
   --protect-literals       Keep string literals unchanged (default: anonymize them)
   --preserve-external      Keep EXTERNAL item names unchanged
+  --preserve-sequence-area Keep columns 1-6 unchanged (default: clean with spaces)
   --dry-run                Process without writing files
   --validate-only          Only validate files, don't transform
   -v, --verbose            Enable verbose output

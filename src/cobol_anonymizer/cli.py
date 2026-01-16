@@ -137,6 +137,12 @@ def create_parser() -> argparse.ArgumentParser:
         help="Preserve EXTERNAL item names (default: anonymize them)",
     )
 
+    parser.add_argument(
+        "--preserve-sequence-area",
+        action="store_true",
+        help="Preserve columns 1-6 (sequence numbers and identification tags) instead of cleaning them",
+    )
+
     # Run modes
     parser.add_argument(
         "--dry-run",
@@ -252,6 +258,7 @@ def args_to_config(args: argparse.Namespace) -> Config:
     config.strip_comments = args.strip_comments
     config.anonymize_literals = not args.protect_literals
     config.preserve_external = args.preserve_external
+    config.clean_sequence_area = not args.preserve_sequence_area  # Clean by default
 
     config.dry_run = args.dry_run
     config.validate_only = args.validate_only
