@@ -47,7 +47,12 @@ cobol-anonymize --input original-cobol-source/ --output anonymized/ --naming-sch
 
 # Dry run (preview without writing files)
 cobol-anonymize --input original-cobol-source/ --output anonymized/ --dry-run
+
+# Force clear output directory without prompting
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --force
 ```
+
+**Note:** If the output directory is not empty, you will be prompted to confirm whether to clear it and continue. Use `--force` to skip the prompt and automatically clear the directory (useful for CI/CD pipelines).
 
 ### Python API
 
@@ -192,6 +197,8 @@ Options:
   --preserve-sequence-area Keep columns 1-6 unchanged (default: clean with spaces)
   --dry-run                Process without writing files
   --validate-only          Only validate files, don't transform
+  --force                  Clear output directory without prompting if not empty
+  --overwrite              Overwrite existing output files
   -v, --verbose            Enable verbose output
   -q, --quiet              Suppress normal output
   --seed N                 Random seed for deterministic output

@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,63 @@ from cobol_anonymizer.generators.naming_schemes import NamingScheme
 from cobol_anonymizer.main import AnonymizationPipeline
 from cobol_anonymizer.output.report import create_summary_report
 from cobol_anonymizer.output.validator import OutputValidator
+
+
+def is_directory_non_empty(directory: Path) -> bool:
+    """
+    Check if a directory exists and contains any files or subdirectories.
+
+    Args:
+        directory: Path to the directory to check
+
+    Returns:
+        True if the directory exists and is not empty, False otherwise
+    """
+    if not directory.exists():
+        return False
+    if not directory.is_dir():
+        return False
+    # Check if there's at least one item in the directory
+    try:
+        next(directory.iterdir())
+        return True
+    except StopIteration:
+        return False
+
+
+def clear_directory(directory: Path) -> None:
+    """
+    Remove all contents of a directory but keep the directory itself.
+
+    Args:
+        directory: Path to the directory to clear
+    """
+    if not directory.exists():
+        return
+    for item in directory.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+
+
+def prompt_user_confirmation(message: str) -> bool:
+    """
+    Prompt the user for yes/no confirmation.
+
+    Args:
+        message: The message to display to the user
+
+    Returns:
+        True if user confirms (y/yes), False otherwise
+    """
+    try:
+        response = input(f"{message} [y/N]: ").strip().lower()
+        return response in ("y", "yes")
+    except (EOFError, KeyboardInterrupt):
+        # Handle non-interactive mode or Ctrl+C
+        print()  # Print newline for clean output
+        return False
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -175,6 +233,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--overwrite",
         action="store_true",
         help="Overwrite existing output files",
+    )
+
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Clear output directory without prompting if not empty",
     )
 
     parser.add_argument(
@@ -391,6 +455,25 @@ def main(args: Optional[list[str]] = None) -> int:
         for error in errors:
             print(f"Configuration error: {error}", file=sys.stderr)
         return 1
+
+    # Check if output directory is not empty (only for actual anonymization runs)
+    if not config.dry_run and not config.validate_only:
+        if is_directory_non_empty(config.output_dir):
+            if parsed.force:
+                # Clear without prompting
+                if not config.quiet:
+                    print(f"Clearing output directory: {config.output_dir}")
+                clear_directory(config.output_dir)
+            else:
+                # Prompt user for confirmation
+                print(f"Output directory is not empty: {config.output_dir}")
+                if prompt_user_confirmation("Do you want to clear it and continue?"):
+                    if not config.quiet:
+                        print("Clearing output directory...")
+                    clear_directory(config.output_dir)
+                else:
+                    print("Aborted by user.")
+                    return 0
 
     # Run appropriate mode
     if config.validate_only:

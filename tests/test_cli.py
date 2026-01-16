@@ -9,11 +9,16 @@ from pathlib import Path
 
 import pytest
 
+from unittest.mock import patch
+
 from cobol_anonymizer.cli import (
     args_to_config,
+    clear_directory,
     create_parser,
+    is_directory_non_empty,
     main,
     parse_args,
+    prompt_user_confirmation,
 )
 from cobol_anonymizer.config import (
     Config,
@@ -735,3 +740,379 @@ class TestMappingsFileGeneration:
         assert mappings_file.exists()
         mappings_data = json.loads(mappings_file.read_text())
         assert len(mappings_data["mappings"]) > 0
+
+
+class TestIsDirectoryNonEmpty:
+    """Tests for is_directory_non_empty helper function."""
+
+    def test_non_existent_directory(self, tmp_path):
+        """Return False for non-existent directory."""
+        non_existent = tmp_path / "does_not_exist"
+        assert is_directory_non_empty(non_existent) is False
+
+    def test_empty_directory(self, tmp_path):
+        """Return False for empty directory."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        assert is_directory_non_empty(empty_dir) is False
+
+    def test_directory_with_file(self, tmp_path):
+        """Return True for directory with file."""
+        dir_with_file = tmp_path / "with_file"
+        dir_with_file.mkdir()
+        (dir_with_file / "file.txt").write_text("content")
+        assert is_directory_non_empty(dir_with_file) is True
+
+    def test_directory_with_subdirectory(self, tmp_path):
+        """Return True for directory with subdirectory."""
+        dir_with_subdir = tmp_path / "with_subdir"
+        dir_with_subdir.mkdir()
+        (dir_with_subdir / "subdir").mkdir()
+        assert is_directory_non_empty(dir_with_subdir) is True
+
+    def test_file_not_directory(self, tmp_path):
+        """Return False when path is a file, not a directory."""
+        file_path = tmp_path / "file.txt"
+        file_path.write_text("content")
+        assert is_directory_non_empty(file_path) is False
+
+
+class TestClearDirectory:
+    """Tests for clear_directory helper function."""
+
+    def test_clear_non_existent_directory(self, tmp_path):
+        """Clearing non-existent directory does nothing."""
+        non_existent = tmp_path / "does_not_exist"
+        clear_directory(non_existent)  # Should not raise
+        assert not non_existent.exists()
+
+    def test_clear_empty_directory(self, tmp_path):
+        """Clearing empty directory leaves it empty."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        clear_directory(empty_dir)
+        assert empty_dir.exists()
+        assert list(empty_dir.iterdir()) == []
+
+    def test_clear_directory_with_files(self, tmp_path):
+        """Clearing directory removes all files."""
+        dir_path = tmp_path / "dir"
+        dir_path.mkdir()
+        (dir_path / "file1.txt").write_text("content1")
+        (dir_path / "file2.txt").write_text("content2")
+
+        clear_directory(dir_path)
+
+        assert dir_path.exists()
+        assert list(dir_path.iterdir()) == []
+
+    def test_clear_directory_with_subdirectories(self, tmp_path):
+        """Clearing directory removes subdirectories recursively."""
+        dir_path = tmp_path / "dir"
+        dir_path.mkdir()
+        subdir = dir_path / "subdir"
+        subdir.mkdir()
+        (subdir / "nested_file.txt").write_text("nested content")
+        (dir_path / "file.txt").write_text("content")
+
+        clear_directory(dir_path)
+
+        assert dir_path.exists()
+        assert list(dir_path.iterdir()) == []
+
+
+class TestPromptUserConfirmation:
+    """Tests for prompt_user_confirmation helper function."""
+
+    def test_yes_response(self):
+        """Return True when user enters 'y'."""
+        with patch("builtins.input", return_value="y"):
+            assert prompt_user_confirmation("Continue?") is True
+
+    def test_yes_full_response(self):
+        """Return True when user enters 'yes'."""
+        with patch("builtins.input", return_value="yes"):
+            assert prompt_user_confirmation("Continue?") is True
+
+    def test_yes_uppercase_response(self):
+        """Return True when user enters 'Y' (uppercase)."""
+        with patch("builtins.input", return_value="Y"):
+            assert prompt_user_confirmation("Continue?") is True
+
+    def test_no_response(self):
+        """Return False when user enters 'n'."""
+        with patch("builtins.input", return_value="n"):
+            assert prompt_user_confirmation("Continue?") is False
+
+    def test_empty_response(self):
+        """Return False when user enters empty string."""
+        with patch("builtins.input", return_value=""):
+            assert prompt_user_confirmation("Continue?") is False
+
+    def test_other_response(self):
+        """Return False for any other input."""
+        with patch("builtins.input", return_value="maybe"):
+            assert prompt_user_confirmation("Continue?") is False
+
+    def test_eof_error(self):
+        """Return False when EOFError is raised (non-interactive)."""
+        with patch("builtins.input", side_effect=EOFError):
+            assert prompt_user_confirmation("Continue?") is False
+
+    def test_keyboard_interrupt(self):
+        """Return False when KeyboardInterrupt is raised (Ctrl+C)."""
+        with patch("builtins.input", side_effect=KeyboardInterrupt):
+            assert prompt_user_confirmation("Continue?") is False
+
+
+class TestNonEmptyOutputDirectory:
+    """Tests for handling non-empty output directory."""
+
+    def test_force_flag_clears_directory(self, tmp_path):
+        """With --force, non-empty output directory is cleared without prompt."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create existing file in output directory
+        existing_file = output_dir / "existing.txt"
+        existing_file.write_text("existing content")
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        result = main(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(output_dir),
+                "--force",
+                "--quiet",
+            ]
+        )
+
+        assert result == 0
+        # Existing file should be removed
+        assert not existing_file.exists()
+        # New files should be created
+        assert output_dir.exists()
+
+    def test_user_confirms_clears_directory(self, tmp_path):
+        """When user confirms, non-empty output directory is cleared."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create existing file in output directory
+        existing_file = output_dir / "existing.txt"
+        existing_file.write_text("existing content")
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        # Mock user confirmation to return True
+        with patch("cobol_anonymizer.cli.prompt_user_confirmation", return_value=True):
+            result = main(
+                [
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_dir),
+                    "--quiet",
+                ]
+            )
+
+        assert result == 0
+        # Existing file should be removed
+        assert not existing_file.exists()
+
+    def test_user_declines_aborts(self, tmp_path):
+        """When user declines, process is aborted."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create existing file in output directory
+        existing_file = output_dir / "existing.txt"
+        existing_file.write_text("existing content")
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        # Mock user confirmation to return False
+        with patch("cobol_anonymizer.cli.prompt_user_confirmation", return_value=False):
+            result = main(
+                [
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_dir),
+                    "--quiet",
+                ]
+            )
+
+        assert result == 0  # Graceful exit
+        # Existing file should remain
+        assert existing_file.exists()
+        # No anonymization should have happened
+        assert not (output_dir / "mappings.json").exists()
+
+    def test_empty_output_directory_no_prompt(self, tmp_path):
+        """Empty output directory does not trigger prompt."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()  # Create empty directory
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        # If prompt was called, it would fail the test
+        with patch("cobol_anonymizer.cli.prompt_user_confirmation") as mock_prompt:
+            result = main(
+                [
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_dir),
+                    "--quiet",
+                ]
+            )
+            mock_prompt.assert_not_called()
+
+        assert result == 0
+
+    def test_non_existent_output_directory_no_prompt(self, tmp_path):
+        """Non-existent output directory does not trigger prompt."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        # Don't create output directory
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        # If prompt was called, it would fail the test
+        with patch("cobol_anonymizer.cli.prompt_user_confirmation") as mock_prompt:
+            result = main(
+                [
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_dir),
+                    "--quiet",
+                ]
+            )
+            mock_prompt.assert_not_called()
+
+        assert result == 0
+
+    def test_dry_run_skips_check(self, tmp_path):
+        """Dry run mode skips output directory check."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create existing file in output directory
+        existing_file = output_dir / "existing.txt"
+        existing_file.write_text("existing content")
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        # If prompt was called, it would fail the test
+        with patch("cobol_anonymizer.cli.prompt_user_confirmation") as mock_prompt:
+            result = main(
+                [
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_dir),
+                    "--dry-run",
+                    "--quiet",
+                ]
+            )
+            mock_prompt.assert_not_called()
+
+        assert result == 0
+        # Existing file should remain (dry run doesn't modify)
+        assert existing_file.exists()
+
+    def test_validate_only_skips_check(self, tmp_path):
+        """Validate only mode skips output directory check."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create existing file in output directory
+        existing_file = output_dir / "existing.txt"
+        existing_file.write_text("existing content")
+
+        # Create a simple COBOL file
+        test_file = input_dir / "test.cob"
+        test_file.write_text("       01 WS-FIELD PIC X.\n")
+
+        # If prompt was called, it would fail the test
+        with patch("cobol_anonymizer.cli.prompt_user_confirmation") as mock_prompt:
+            result = main(
+                [
+                    "--input",
+                    str(input_dir),
+                    "--output",
+                    str(output_dir),
+                    "--validate-only",
+                    "--quiet",
+                ]
+            )
+            mock_prompt.assert_not_called()
+
+        assert result == 0
+        # Existing file should remain (validate only doesn't modify)
+        assert existing_file.exists()
+
+
+class TestParseForceFlag:
+    """Tests for --force flag parsing."""
+
+    def test_parse_force_flag(self, tmp_path):
+        """Parse --force flag."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+                "--force",
+            ]
+        )
+        assert args.force is True
+
+    def test_parse_no_force_flag(self, tmp_path):
+        """Default force flag is False."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        args = parse_args(
+            [
+                "--input",
+                str(input_dir),
+                "--output",
+                str(tmp_path / "output"),
+            ]
+        )
+        assert args.force is False
