@@ -4,10 +4,10 @@ Command-Line Interface for COBOL Anonymizer.
 This module provides the command-line interface for the COBOL anonymization tool.
 
 Usage:
-    cobol-anonymize --input original/ --output anonymized/
-    cobol-anonymize --input original/ --output anonymized/ --verbose
-    cobol-anonymize --input original/ --output anonymized/ --validate-only
-    cobol-anonymize --input original/ --output anonymized/ --dry-run
+    cobol-anonymize --input original-cobol-source/ --output anonymized/
+    cobol-anonymize --input original-cobol-source/ --output anonymized/ --verbose
+    cobol-anonymize --input original-cobol-source/ --output anonymized/ --validate-only
+    cobol-anonymize --input original-cobol-source/ --output anonymized/ --dry-run
 """
 
 import argparse
@@ -126,9 +126,15 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--no-preserve-external",
+        "--protect-literals",
         action="store_true",
-        help="Don't preserve EXTERNAL item names",
+        help="Keep string literal contents unchanged (default: anonymize them)",
+    )
+
+    parser.add_argument(
+        "--preserve-external",
+        action="store_true",
+        help="Preserve EXTERNAL item names (default: anonymize them)",
     )
 
     # Run modes
@@ -244,7 +250,8 @@ def args_to_config(args: argparse.Namespace) -> Config:
     config.anonymize_paragraphs = not args.no_paragraphs
     config.anonymize_comments = not args.no_comments
     config.strip_comments = args.strip_comments
-    config.preserve_external = not args.no_preserve_external
+    config.anonymize_literals = not args.protect_literals
+    config.preserve_external = args.preserve_external
 
     config.dry_run = args.dry_run
     config.validate_only = args.validate_only

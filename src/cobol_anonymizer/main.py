@@ -72,6 +72,9 @@ class AnonymizationPipeline:
             source_directory=self.config.input_dir,
             output_directory=self.config.output_dir if not self.config.dry_run else None,
             naming_scheme=self.config.naming_scheme,
+            preserve_external=self.config.preserve_external,
+            anonymize_literals=self.config.anonymize_literals,
+            seed=self.config.seed,
         )
 
         # Add copybook search paths
@@ -141,14 +144,24 @@ class AnonymizationPipeline:
             if on_files_discovered:
                 on_files_discovered(files)
 
-            # Process each file
+            # First pass: classify all files to build complete mapping table
+            # This ensures cross-file references (like CALL "PROGRAM") work correctly
+            all_identifiers = []
+            for file_path in files:
+                identifiers = self.anonymizer.classify_file(file_path)
+                all_identifiers.extend(identifiers)
+
+            # Build mappings from all identifiers
+            self.anonymizer.build_mappings(all_identifiers)
+
+            # Second pass: transform each file (all mappings are now available)
             for i, file_path in enumerate(files, 1):
                 # Notify file start
                 if on_file_start:
                     on_file_start(file_path, i, len(files))
 
                 try:
-                    file_result = self._process_file(file_path)
+                    file_result = self._transform_file(file_path)
                     if file_result:
                         result.file_results.append(file_result)
 
@@ -206,17 +219,19 @@ class AnonymizationPipeline:
 
         return result
 
-    def _process_file(self, file_path: Path) -> Optional[FileTransformResult]:
-        """Process a single file through the pipeline."""
-        # Classify identifiers
-        identifiers = self.anonymizer.classify_file(file_path)
-
-        # Build mappings
-        self.anonymizer.build_mappings(identifiers)
-
-        # Transform file
+    def _transform_file(self, file_path: Path) -> Optional[FileTransformResult]:
+        """Transform a single file (classification and mapping done in first pass)."""
         if not self.config.validate_only:
-            return self.anonymizer.anonymize_file(file_path)
+            # Transform the file - mappings are already built
+            result = self.anonymizer.transform_file(file_path)
+
+            # Write output if not dry run
+            if not self.config.dry_run and self.config.output_dir:
+                anon_filename = self.anonymizer._get_anonymized_filename(file_path.name)
+                output_path = self.config.output_dir / anon_filename
+                self.anonymizer._write_output(result, output_path)
+
+            return result
 
         return None
 

@@ -16,7 +16,7 @@ Your task is:
 
 # 1 Fix bug
 Your changes do not implement the new requirement.
-For example, consider the file "EDMCA020.cpy" in the folder "original".
+For example, consider the file "EDMCA020.cpy" in the folder "original-cobol-source".
 If you anonymize it you generate a new file which has exactly the same comments as the original one has.
 For instance, the start of the anonymized file is still like this:
       * 

@@ -88,9 +88,10 @@ COBOL uses 80-column fixed format:
 
 ### Never Anonymize
 - **PIC clauses**: Data layout descriptors (e.g., `PIC X(10)`, `PIC 9(5)V99`)
-- **EXTERNAL items**: Cross-program visible names
+- **EXTERNAL items**: Cross-program visible names (unless `preserve_external=False`)
 - **COBOL reserved words**: Keywords like `MOVE`, `PERFORM`, `IF`
-- **Literals**: Quoted strings and numeric constants
+- **Numeric literals**: Numeric constants
+- **String literals**: Only when using `--protect-literals` flag (default: anonymized)
 
 ### Identifier Types
 ```python
@@ -122,11 +123,14 @@ Word-based schemes use MD5 hashing for determinism and require minimum 5-char ta
 All configuration uses `@dataclass` with sensible defaults:
 ```python
 config = Config(
-    input_dir=Path("original/"),
+    input_dir=Path("original-cobol-source/"),
     output_dir=Path("anonymized/"),
     naming_scheme=NamingScheme.ANIMALS,
     anonymize_comments=True,
-    preserve_external=True,
+    # anonymize_literals=True (default) - string literals are anonymized
+    # anonymize_literals=False - string literals keep original content (--protect-literals)
+    # preserve_external=False (default) - EXTERNAL items are anonymized
+    # preserve_external=True - EXTERNAL items keep original names
 )
 ```
 

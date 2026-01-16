@@ -35,8 +35,9 @@ class Config:
         anonymize_paragraphs: Anonymize paragraph names
         anonymize_sections: Anonymize section names
         anonymize_comments: Anonymize comment content
+        anonymize_literals: Anonymize string literal contents (default: True, use --protect-literals to disable)
         strip_comments: Remove comment content entirely
-        preserve_external: Keep EXTERNAL item names unchanged
+        preserve_external: Keep EXTERNAL item names unchanged (default: False - anonymize them)
         validate_columns: Validate column 72 limit
         validate_identifiers: Validate identifier length
         dry_run: Don't write output files
@@ -64,8 +65,9 @@ class Config:
     anonymize_paragraphs: bool = True
     anonymize_sections: bool = True
     anonymize_comments: bool = True
+    anonymize_literals: bool = True
     strip_comments: bool = False
-    preserve_external: bool = True
+    preserve_external: bool = False
 
     # Validation options
     validate_columns: bool = True

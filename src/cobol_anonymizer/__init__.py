@@ -10,24 +10,24 @@ Basic Usage:
 
     # Simple usage
     result = anonymize_directory(
-        input_dir=Path("original/"),
+        input_dir=Path("original-cobol-source/"),
         output_dir=Path("anonymized/"),
     )
 
     # With configuration
     config = Config(
-        input_dir=Path("original/"),
+        input_dir=Path("original-cobol-source/"),
         output_dir=Path("anonymized/"),
-        preserve_external=True,
         anonymize_comments=True,
+        # preserve_external=True,  # Set to True to keep EXTERNAL item names unchanged
     )
     pipeline = AnonymizationPipeline(config)
     result = pipeline.run()
 
 Command-Line Usage:
-    cobol-anonymize --input original/ --output anonymized/
-    cobol-anonymize --input original/ --output anonymized/ --verbose
-    cobol-anonymize --input original/ --output anonymized/ --validate-only
+    cobol-anonymize --input original-cobol-source/ --output anonymized/
+    cobol-anonymize --input original-cobol-source/ --output anonymized/ --verbose
+    cobol-anonymize --input original-cobol-source/ --output anonymized/ --validate-only
 """
 
 __version__ = "1.0.0"

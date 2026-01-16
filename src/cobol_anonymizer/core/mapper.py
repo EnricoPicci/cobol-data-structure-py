@@ -4,7 +4,7 @@ COBOL Identifier Mapping Table - Manages original to anonymized name mappings.
 This module provides a global mapping table that:
 - Maps original identifiers to anonymized names
 - Ensures cross-file consistency
-- Tracks EXTERNAL identifiers (which should not be anonymized)
+- Tracks EXTERNAL identifiers (anonymized by default, can be preserved with _preserve_external=True)
 - Supports case-insensitive lookup (COBOL standard)
 - Provides persistence via JSON export/import
 """
@@ -89,6 +89,10 @@ class MappingTable:
         table = MappingTable(_naming_scheme=NamingScheme.ANIMALS)
         anon_name = table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
         # -> "FLUFFY-LLAMA-1"
+
+        # Anonymize EXTERNAL items (default behavior):
+        table = MappingTable(_preserve_external=False)
+        # EXTERNAL items will be anonymized like regular identifiers
     """
 
     _mappings: dict[str, MappingEntry] = field(default_factory=dict)
@@ -96,6 +100,7 @@ class MappingTable:
     _generator: NameGenerator = field(default_factory=NameGenerator)
     _preserve_length: bool = True
     _naming_scheme: NamingScheme = NamingScheme.CORPORATE
+    _preserve_external: bool = False
 
     def __post_init__(self):
         # Configure the generator with naming scheme
@@ -124,25 +129,15 @@ class MappingTable:
             line_number: Line number for tracking
 
         Returns:
-            The anonymized name (or original if EXTERNAL)
+            The anonymized name (or original if EXTERNAL and _preserve_external=True)
         """
         # Normalize to uppercase for case-insensitive lookup
         key = original_name.upper()
 
-        # Check if this is an EXTERNAL item
-        if is_external or id_type == IdentifierType.EXTERNAL_NAME:
+        # Track EXTERNAL items
+        is_external_item = is_external or id_type == IdentifierType.EXTERNAL_NAME
+        if is_external_item:
             self._external_names.add(key)
-            # EXTERNAL items keep their original names
-            if key not in self._mappings:
-                self._mappings[key] = MappingEntry(
-                    original_name=original_name,
-                    anonymized_name=original_name,  # Keep original
-                    id_type=id_type,
-                    is_external=True,
-                    first_seen_file=file_name,
-                    first_seen_line=line_number,
-                )
-            return original_name
 
         # Check for existing mapping
         if key in self._mappings:
@@ -150,11 +145,24 @@ class MappingTable:
             entry.occurrence_count += 1
             return entry.anonymized_name
 
-        # Check if it's a known EXTERNAL name
-        if key in self._external_names:
+        # Handle EXTERNAL items based on _preserve_external setting
+        if is_external_item and self._preserve_external:
+            # Preserve original name for EXTERNAL items
+            self._mappings[key] = MappingEntry(
+                original_name=original_name,
+                anonymized_name=original_name,  # Keep original
+                id_type=id_type,
+                is_external=True,
+                first_seen_file=file_name,
+                first_seen_line=line_number,
+            )
             return original_name
 
-        # Generate new anonymized name
+        # Check if it's a known EXTERNAL name that should be preserved
+        if key in self._external_names and self._preserve_external:
+            return original_name
+
+        # Generate new anonymized name (also for EXTERNAL items when _preserve_external=False)
         anonymized = self._generator.generate(original_name, id_type)
 
         # Create mapping entry
@@ -162,7 +170,7 @@ class MappingTable:
             original_name=original_name,
             anonymized_name=anonymized,
             id_type=id_type,
-            is_external=False,
+            is_external=is_external_item,
             first_seen_file=file_name,
             first_seen_line=line_number,
         )

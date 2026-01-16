@@ -1,20 +1,25 @@
 """
 Tests for Phase 2: COBOL Column Handler.
 
-Tests for fixed-format line parsing, reconstruction, and validation.
+Tests for fixed-format and free-format line parsing, reconstruction, and validation.
 """
 
 import pytest
 
 from cobol_anonymizer.cobol.column_handler import (
+    COBOLFormat,
     COBOLLine,
     IndicatorType,
     detect_change_tag,
+    detect_cobol_format,
     extract_line_ending,
     get_code_start_column,
     is_area_a_content,
     parse_file_line,
+    parse_file_line_auto,
     parse_line,
+    parse_line_auto,
+    parse_line_free_format,
     reconstruct_line,
     reconstruct_line_with_ending,
     validate_code_area,
@@ -490,3 +495,261 @@ class TestRealWorldExamples:
         parsed2 = parse_line(line2)
         assert not parsed1.is_continuation
         assert parsed2.is_continuation
+
+
+class TestCOBOLFormatDetection:
+    """Tests for COBOL format detection (fixed vs free)."""
+
+    def test_detect_fixed_format_standard(self):
+        """Detect standard 80-column fixed format."""
+        lines = [
+            "000100 IDENTIFICATION DIVISION.                                            ",
+            "000200 PROGRAM-ID. TESTPROG.                                               ",
+            "000300*COMMENT LINE                                                        ",
+            "000400 DATA DIVISION.                                                      ",
+        ]
+        assert detect_cobol_format(lines) == COBOLFormat.FIXED
+
+    def test_detect_fixed_format_with_indicators(self):
+        """Detect fixed format from column 7 indicators."""
+        lines = [
+            "      *COMMENT LINE",
+            "       IDENTIFICATION DIVISION.",
+            "      /PAGE EJECT",
+            "       DATA DIVISION.",
+        ]
+        assert detect_cobol_format(lines) == COBOLFormat.FIXED
+
+    def test_detect_free_format_with_star_greater(self):
+        """Detect free format from *> comments."""
+        lines = [
+            "*> This is a free-format comment",
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. TESTPROG.",
+            "*> Another comment",
+            "DATA DIVISION.",
+        ]
+        assert detect_cobol_format(lines) == COBOLFormat.FREE
+
+    def test_detect_free_format_short_lines(self):
+        """Detect free format from short lines without sequence numbers."""
+        lines = [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. TESTPROG.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01  WS-FIELD PIC X(10).",
+        ]
+        assert detect_cobol_format(lines) == COBOLFormat.FREE
+
+    def test_detect_free_format_mixed_comments(self):
+        """Detect free format with *> style comments."""
+        lines = [
+            "*> **********************************************************",
+            "*> * COBCALC                                                *",
+            "*> **********************************************************",
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. COBCALC.",
+        ]
+        assert detect_cobol_format(lines) == COBOLFormat.FREE
+
+    def test_detect_empty_lines_ignored(self):
+        """Empty lines don't affect format detection."""
+        lines = [
+            "",
+            "*> Free format comment",
+            "",
+            "IDENTIFICATION DIVISION.",
+        ]
+        assert detect_cobol_format(lines) == COBOLFormat.FREE
+
+
+class TestParseFreeFormat:
+    """Tests for free-format COBOL line parsing."""
+
+    def test_parse_free_format_simple(self):
+        """Parse simple free-format line."""
+        line = "01  WS-FIELD PIC X(10)."
+        parsed = parse_line_free_format(line)
+        assert parsed.source_format == COBOLFormat.FREE
+        assert "01  WS-FIELD PIC X(10)." in parsed.code_area
+        assert parsed.sequence == ""
+        assert not parsed.is_comment
+
+    def test_parse_free_format_comment(self):
+        """Parse free-format comment line (*>)."""
+        line = "*> This is a comment"
+        parsed = parse_line_free_format(line)
+        assert parsed.is_comment
+        assert parsed.indicator == "*"
+        assert parsed.source_format == COBOLFormat.FREE
+
+    def test_parse_free_format_star_comment(self):
+        """Parse free-format comment line (*)."""
+        line = "* This is also a comment"
+        parsed = parse_line_free_format(line)
+        assert parsed.is_comment
+
+    def test_parse_free_format_preserves_content(self):
+        """Free-format parsing preserves entire line content."""
+        line = "    05  CALL-FEEDBACK     PIC XX."
+        parsed = parse_line_free_format(line)
+        # The full content should be in code_area
+        assert "CALL-FEEDBACK" in parsed.code_area
+        assert "PIC XX" in parsed.code_area
+
+    def test_parse_free_format_original_length(self):
+        """Free-format preserves original line length."""
+        line = "MOVE SPACES TO WS-FIELD."
+        parsed = parse_line_free_format(line)
+        assert parsed.original_length == len(line)
+
+    def test_parse_free_format_indented(self):
+        """Free-format handles indented code."""
+        line = "    PERFORM PROCESS-RECORD"
+        parsed = parse_line_free_format(line)
+        assert "PERFORM PROCESS-RECORD" in parsed.code_area
+        assert not parsed.is_comment
+
+
+class TestParseLineAuto:
+    """Tests for auto-detecting format parsing."""
+
+    def test_parse_auto_with_free_format(self):
+        """Auto-parse with detected free format."""
+        line = "01  WS-FIELD PIC X(10)."
+        parsed = parse_line_auto(line, detected_format=COBOLFormat.FREE)
+        assert parsed.source_format == COBOLFormat.FREE
+        assert "01  WS-FIELD" in parsed.code_area
+
+    def test_parse_auto_with_fixed_format(self):
+        """Auto-parse with detected fixed format."""
+        line = "       01  WS-FIELD PIC X(10)."
+        parsed = parse_line_auto(line, detected_format=COBOLFormat.FIXED)
+        assert parsed.source_format == COBOLFormat.FIXED
+        assert "01  WS-FIELD" in parsed.code_area
+
+    def test_parse_auto_detects_star_greater(self):
+        """Auto-parse detects *> as free format."""
+        line = "*> This is a comment"
+        parsed = parse_line_auto(line, detected_format=None)
+        # Should detect as free format due to *>
+        assert parsed.is_comment
+
+    def test_parse_file_line_auto_free(self):
+        """parse_file_line_auto handles free format with line ending."""
+        line = "01  WS-FIELD.\n"
+        parsed = parse_file_line_auto(line, detected_format=COBOLFormat.FREE)
+        assert parsed.source_format == COBOLFormat.FREE
+        assert parsed.line_ending == "\n"
+        assert "WS-FIELD" in parsed.code_area
+
+
+class TestFreeFormatRealWorld:
+    """Tests using realistic free-format COBOL patterns."""
+
+    def test_free_format_program_structure(self):
+        """Parse a realistic free-format program structure."""
+        lines = [
+            "*> **********************************************************",
+            "*> * TESTPROG - Test Program                                *",
+            "*> **********************************************************",
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. TESTPROG.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01  WS-RECORD.",
+            "    05  WS-FIELD-1    PIC X(10).",
+            "    05  WS-FIELD-2    PIC 9(5).",
+            "PROCEDURE DIVISION.",
+            "    MOVE SPACES TO WS-FIELD-1.",
+            "    STOP RUN.",
+        ]
+
+        detected = detect_cobol_format(lines)
+        assert detected == COBOLFormat.FREE
+
+        # Parse each line and verify content is preserved
+        for line in lines:
+            if not line.strip():
+                continue
+            parsed = parse_line_auto(line, detected_format=detected)
+            # Verify the meaningful content is in code_area
+            content = line.strip()
+            if content.startswith("*>"):
+                assert parsed.is_comment
+            else:
+                # Check that identifiable parts are in code_area
+                if "WS-FIELD" in content:
+                    assert "WS-FIELD" in parsed.code_area
+                if "PROGRAM-ID" in content:
+                    assert "PROGRAM-ID" in parsed.code_area
+
+    def test_free_format_data_definitions(self):
+        """Free-format data definitions are parsed correctly."""
+        lines = [
+            "01  INPUT-BUFFER-FIELDS.",
+            "    05  BUFFER-PTR        PIC 9.",
+            "    05  BUFFER-DATA.",
+            "        10  FILLER        PIC X(10)  VALUE 'LOAN'.",
+        ]
+
+        for line in lines:
+            parsed = parse_line_free_format(line)
+            # Verify identifiers are accessible in code_area
+            if "BUFFER-PTR" in line:
+                assert "BUFFER-PTR" in parsed.code_area
+            if "BUFFER-DATA" in line:
+                assert "BUFFER-DATA" in parsed.code_area
+            if "FILLER" in line:
+                assert "FILLER" in parsed.code_area
+
+    def test_free_format_procedure_statements(self):
+        """Free-format procedure statements are parsed correctly."""
+        lines = [
+            "ACCEPT-INPUT.",
+            "    MOVE BUFFER-ARRAY (BUFFER-PTR) TO INPUT-1.",
+            "    ADD 1 BUFFER-PTR GIVING BUFFER-PTR.",
+            "    EVALUATE FUNCTION UPPER-CASE(INPUT-1)",
+            "      WHEN 'END'",
+            "        MOVE 'END' TO INPUT-1",
+            "    END-EVALUATE.",
+        ]
+
+        for line in lines:
+            parsed = parse_line_free_format(line)
+            # Verify procedure content is in code_area
+            if "ACCEPT-INPUT" in line:
+                assert "ACCEPT-INPUT" in parsed.code_area
+            if "MOVE" in line:
+                assert "MOVE" in parsed.code_area
+            if "EVALUATE" in line:
+                assert "EVALUATE" in parsed.code_area
+
+
+class TestSourceFormatField:
+    """Tests for the source_format field in COBOLLine."""
+
+    def test_fixed_format_default(self):
+        """Fixed format parsing sets source_format to FIXED."""
+        line = "       01  WS-FIELD."
+        parsed = parse_line(line)
+        assert parsed.source_format == COBOLFormat.FIXED
+
+    def test_free_format_sets_field(self):
+        """Free format parsing sets source_format to FREE."""
+        line = "01  WS-FIELD."
+        parsed = parse_line_free_format(line)
+        assert parsed.source_format == COBOLFormat.FREE
+
+    def test_auto_parse_preserves_format(self):
+        """Auto-parse preserves the detected format in the field."""
+        line = "01  WS-FIELD."
+
+        parsed_free = parse_line_auto(line, detected_format=COBOLFormat.FREE)
+        assert parsed_free.source_format == COBOLFormat.FREE
+
+        # With 7+ chars the fixed format parser can work
+        line_fixed = "       01  WS-FIELD."
+        parsed_fixed = parse_line_auto(line_fixed, detected_format=COBOLFormat.FIXED)
+        assert parsed_fixed.source_format == COBOLFormat.FIXED

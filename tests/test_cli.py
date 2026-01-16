@@ -36,7 +36,7 @@ class TestConfig:
         config = create_default_config()
         assert config is not None
         assert config.encoding == "latin-1"
-        assert config.preserve_external is True
+        assert config.preserve_external is False
 
     def test_config_to_dict(self):
         """Convert config to dictionary."""

@@ -90,8 +90,8 @@ class TestLineTransformer:
         # Original text should not be present
         assert "THIS IS A COMMENT" not in result.transformed_line
 
-    def test_external_item_preserved(self):
-        """EXTERNAL items keep original names."""
+    def test_external_item_anonymized_by_default(self):
+        """EXTERNAL items are anonymized by default."""
         table = MappingTable()
         table.get_or_create("SHARED-AREA", IdentifierType.EXTERNAL_NAME, is_external=True)
 
@@ -99,7 +99,20 @@ class TestLineTransformer:
         parsed = parse_line("       01 SHARED-AREA EXTERNAL.", 1)
         result = transformer.transform_line(parsed)
 
-        # Should still contain SHARED-AREA
+        # By default, EXTERNAL items should be anonymized
+        assert "SHARED-AREA" not in result.transformed_line
+        assert len(result.changes_made) > 0
+
+    def test_external_item_preserved_when_configured(self):
+        """EXTERNAL items keep original names when preserve_external=True."""
+        table = MappingTable(_preserve_external=True)
+        table.get_or_create("SHARED-AREA", IdentifierType.EXTERNAL_NAME, is_external=True)
+
+        transformer = LineTransformer(table, preserve_external=True)
+        parsed = parse_line("       01 SHARED-AREA EXTERNAL.", 1)
+        result = transformer.transform_line(parsed)
+
+        # With preserve_external=True, EXTERNAL items should keep original names
         assert "SHARED-AREA" in result.transformed_line
 
 
@@ -333,6 +346,69 @@ class TestAnonymizerOutput:
         output_files = list(output_dir.glob("*.cob"))
         assert len(output_files) >= 0  # May use different naming
 
+    def test_filename_anonymization(self, tmp_path):
+        """Output filename is anonymized based on PROGRAM-ID mapping."""
+        # Create a program with PROGRAM-ID
+        program = tmp_path / "MYPROGRAM.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. MYPROGRAM.\n"
+            "       DATA DIVISION.\n"
+            "       WORKING-STORAGE SECTION.\n"
+            "       01 WS-FIELD PIC X.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+        )
+
+        anon.anonymize_file(program)
+
+        # Output file should be anonymized (not MYPROGRAM.cob)
+        output_files = list(output_dir.glob("*.cob"))
+        assert len(output_files) == 1
+        # Original filename should not exist
+        assert not (output_dir / "MYPROGRAM.cob").exists()
+        # The anonymized file should exist
+        anon_name = anon.mapping_table.get_anonymized_name("MYPROGRAM")
+        assert anon_name is not None
+        assert (output_dir / f"{anon_name}.cob").exists()
+
+    def test_filename_anonymization_free_format(self, tmp_path):
+        """Output filename is anonymized for free-format COBOL."""
+        # Create a free-format program
+        program = tmp_path / "TESTPROG.cbl"
+        program.write_text(
+            "*> Test program\n"
+            "IDENTIFICATION DIVISION.\n"
+            "PROGRAM-ID. TESTPROG.\n"
+            "DATA DIVISION.\n"
+            "WORKING-STORAGE SECTION.\n"
+            "01 WS-DATA PIC X(10).\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+        )
+
+        anon.anonymize_file(program)
+
+        # Output file should be anonymized
+        output_files = list(output_dir.glob("*.cbl"))
+        assert len(output_files) == 1
+        assert not (output_dir / "TESTPROG.cbl").exists()
+        # Verify mapping exists
+        anon_name = anon.mapping_table.get_anonymized_name("TESTPROG")
+        assert anon_name is not None
+
 
 class TestAnonymizerSpecialCases:
     """Tests for special cases in anonymization."""
@@ -353,20 +429,21 @@ class TestAnonymizerSpecialCases:
         assert "TO" in output
 
     def test_transform_value_literal(self, tmp_path):
-        """VALUE clause literals are handled."""
+        """VALUE clause literals are handled (preserved when --protect-literals)."""
         program = tmp_path / "TEST.cob"
         program.write_text("       05 WS-FLAG PIC X VALUE 'Y'.\n")
 
-        anon = Anonymizer(source_directory=tmp_path)
+        # Use anonymize_literals=False to test literal preservation
+        anon = Anonymizer(source_directory=tmp_path, anonymize_literals=False)
         result = anon.anonymize_file(program)
 
-        # VALUE and literal should be preserved
+        # VALUE and literal should be preserved when literals are protected
         output = result.changes[0].transformed_line
         assert "VALUE" in output
-        assert "'Y'" in output  # Literal preserved
+        assert "'Y'" in output  # Literal preserved with --protect-literals
 
-    def test_external_item_not_anonymized(self, tmp_path):
-        """EXTERNAL items keep original names."""
+    def test_external_item_anonymized_by_default(self, tmp_path):
+        """EXTERNAL items are anonymized by default."""
         program = tmp_path / "TEST.cob"
         program.write_text("       01 SHARED-AREA EXTERNAL.\n")
 
@@ -374,4 +451,485 @@ class TestAnonymizerSpecialCases:
         result = anon.anonymize_file(program)
 
         output = result.changes[0].transformed_line
+        # EXTERNAL items should be anonymized by default
+        assert "SHARED-AREA" not in output
+
+    def test_external_item_preserved_when_configured(self, tmp_path):
+        """EXTERNAL items keep original names when preserve_external=True."""
+        program = tmp_path / "TEST.cob"
+        program.write_text("       01 SHARED-AREA EXTERNAL.\n")
+
+        anon = Anonymizer(source_directory=tmp_path, preserve_external=True)
+        result = anon.anonymize_file(program)
+
+        output = result.changes[0].transformed_line
+        # EXTERNAL items should be preserved with preserve_external=True
         assert "SHARED-AREA" in output
+
+
+class TestCallStatementAnonymization:
+    """Tests for CALL statement program name anonymization."""
+
+    def test_call_statement_fixed_format(self, tmp_path):
+        """CALL statement program names are anonymized in fixed format."""
+        # Create main program that calls a subprogram
+        main_prog = tmp_path / "MAINPROG.cob"
+        main_prog.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. MAINPROG.\n"
+            "       PROCEDURE DIVISION.\n"
+            '           CALL "SUBPROG" USING WS-DATA.\n'
+            "           STOP RUN.\n"
+        )
+
+        # Create subprogram
+        sub_prog = tmp_path / "SUBPROG.cob"
+        sub_prog.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. SUBPROG.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           GOBACK.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Disable literal anonymization to test pure CALL program name replacement
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=False,
+        )
+
+        # Use anonymize_all to ensure proper two-pass processing
+        results = anon.anonymize_all()
+
+        # Get the anonymized name for SUBPROG
+        subprog_anon = anon.mapping_table.get_anonymized_name("SUBPROG")
+        assert subprog_anon is not None
+
+        # Find the main program result and check CALL statement
+        main_result = next(r for r in results if "MAINPROG" in r.filename)
+        call_line = next(
+            c.transformed_line for c in main_result.changes if "CALL" in c.transformed_line
+        )
+
+        # The CALL statement should use the anonymized name
+        assert f'"{subprog_anon}"' in call_line
+        assert '"SUBPROG"' not in call_line
+
+    def test_call_statement_free_format(self, tmp_path):
+        """CALL statement program names are anonymized in free format."""
+        # Create main program in free format
+        main_prog = tmp_path / "MAINPROG.cbl"
+        main_prog.write_text(
+            "IDENTIFICATION DIVISION.\n"
+            "PROGRAM-ID. MAINPROG.\n"
+            "PROCEDURE DIVISION.\n"
+            'CALL "SUBPROG" USING WS-DATA.\n'
+            "STOP RUN.\n"
+        )
+
+        # Create subprogram in free format
+        sub_prog = tmp_path / "SUBPROG.cbl"
+        sub_prog.write_text(
+            "IDENTIFICATION DIVISION.\n"
+            "PROGRAM-ID. SUBPROG.\n"
+            "PROCEDURE DIVISION.\n"
+            "GOBACK.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Disable literal anonymization to test pure CALL program name replacement
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=False,
+        )
+
+        # Use anonymize_all for proper two-pass processing
+        results = anon.anonymize_all()
+
+        # Get the anonymized name for SUBPROG
+        subprog_anon = anon.mapping_table.get_anonymized_name("SUBPROG")
+        assert subprog_anon is not None
+
+        # Find the main program result and check CALL statement
+        main_result = next(r for r in results if "MAINPROG" in r.filename)
+        call_line = next(
+            c.transformed_line for c in main_result.changes if "CALL" in c.transformed_line
+        )
+
+        # The CALL statement should use the anonymized name
+        assert f'"{subprog_anon}"' in call_line
+        assert '"SUBPROG"' not in call_line
+
+    def test_call_statement_single_quotes(self, tmp_path):
+        """CALL statement with single quotes is anonymized."""
+        main_prog = tmp_path / "MAINPROG.cob"
+        main_prog.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. MAINPROG.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           CALL 'SUBPROG' USING WS-DATA.\n"
+            "           STOP RUN.\n"
+        )
+
+        sub_prog = tmp_path / "SUBPROG.cob"
+        sub_prog.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. SUBPROG.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           GOBACK.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Disable literal anonymization to test pure CALL program name replacement
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=False,
+        )
+
+        results = anon.anonymize_all()
+
+        subprog_anon = anon.mapping_table.get_anonymized_name("SUBPROG")
+        assert subprog_anon is not None
+
+        main_result = next(r for r in results if "MAINPROG" in r.filename)
+        call_line = next(
+            c.transformed_line for c in main_result.changes if "CALL" in c.transformed_line
+        )
+
+        # Single quotes should be preserved
+        assert f"'{subprog_anon}'" in call_line
+        assert "'SUBPROG'" not in call_line
+
+    def test_call_statement_multiple_calls(self, tmp_path):
+        """Multiple CALL statements are all anonymized."""
+        main_prog = tmp_path / "MAINPROG.cob"
+        main_prog.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. MAINPROG.\n"
+            "       PROCEDURE DIVISION.\n"
+            '           CALL "SUBPROG1" USING WS-DATA.\n'
+            '           CALL "SUBPROG2" USING WS-DATA.\n'
+            "           STOP RUN.\n"
+        )
+
+        sub_prog1 = tmp_path / "SUBPROG1.cob"
+        sub_prog1.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. SUBPROG1.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           GOBACK.\n"
+        )
+
+        sub_prog2 = tmp_path / "SUBPROG2.cob"
+        sub_prog2.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. SUBPROG2.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           GOBACK.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Disable literal anonymization to test pure CALL program name replacement
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=False,
+        )
+
+        results = anon.anonymize_all()
+
+        sub1_anon = anon.mapping_table.get_anonymized_name("SUBPROG1")
+        sub2_anon = anon.mapping_table.get_anonymized_name("SUBPROG2")
+        assert sub1_anon is not None
+        assert sub2_anon is not None
+
+        main_result = next(r for r in results if "MAINPROG" in r.filename)
+        call_lines = [
+            c.transformed_line for c in main_result.changes if "CALL" in c.transformed_line
+        ]
+
+        # Both CALL statements should be anonymized
+        assert len(call_lines) == 2
+        all_calls = " ".join(call_lines)
+        assert f'"{sub1_anon}"' in all_calls
+        assert f'"{sub2_anon}"' in all_calls
+        assert '"SUBPROG1"' not in all_calls
+        assert '"SUBPROG2"' not in all_calls
+
+
+class TestDisplayLiteralAnonymization:
+    """Tests for DISPLAY statement string literal anonymization."""
+
+    def test_display_literal_fixed_format(self, tmp_path):
+        """DISPLAY statement literals are anonymized in fixed format."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       PROCEDURE DIVISION.\n"
+            '           DISPLAY "Hello World".\n'
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=True,
+        )
+
+        results = anon.anonymize_all()
+
+        # Find the DISPLAY line
+        result = results[0]
+        display_line = next(
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        )
+
+        # The original literal should not be present
+        assert "Hello World" not in display_line
+        # Should still have DISPLAY and quotes
+        assert "DISPLAY" in display_line
+        assert '"' in display_line
+
+    def test_display_literal_free_format(self, tmp_path):
+        """DISPLAY statement literals are anonymized in free format."""
+        program = tmp_path / "TEST.cbl"
+        program.write_text(
+            "IDENTIFICATION DIVISION.\n"
+            "PROGRAM-ID. TEST.\n"
+            "PROCEDURE DIVISION.\n"
+            'DISPLAY "Processing complete".\n'
+            "STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=True,
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        display_line = next(
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        )
+
+        # The original literal should not be present
+        assert "Processing complete" not in display_line
+        assert "DISPLAY" in display_line
+
+    def test_display_literal_single_quotes(self, tmp_path):
+        """DISPLAY statement with single quotes is anonymized."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           DISPLAY 'Error message'.\n"
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=True,
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        display_line = next(
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        )
+
+        # The original literal should not be present
+        assert "Error message" not in display_line
+        # Single quotes should be preserved
+        assert "'" in display_line
+
+    def test_display_literal_length_preserved(self, tmp_path):
+        """DISPLAY literal length is preserved after anonymization."""
+        original_text = "Customer Name Field"
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       PROCEDURE DIVISION.\n"
+            f'           DISPLAY "{original_text}".\n'
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=True,
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        display_line = next(
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        )
+
+        # Extract the new literal content
+        import re
+
+        match = re.search(r'"([^"]*)"', display_line)
+        assert match is not None
+        new_literal = match.group(1)
+
+        # Length should be preserved
+        assert len(new_literal) == len(original_text)
+
+    def test_display_multiple_literals(self, tmp_path):
+        """Multiple DISPLAY statements are all anonymized."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       PROCEDURE DIVISION.\n"
+            '           DISPLAY "Starting process".\n'
+            '           DISPLAY "Ending process".\n'
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=True,
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        display_lines = [
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        ]
+
+        # Both DISPLAY statements should be anonymized
+        assert len(display_lines) == 2
+        all_displays = " ".join(display_lines)
+        assert "Starting process" not in all_displays
+        assert "Ending process" not in all_displays
+
+    def test_display_literals_enabled_by_default(self, tmp_path):
+        """DISPLAY literals ARE anonymized by default (anonymize_literals=True)."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       PROCEDURE DIVISION.\n"
+            '           DISPLAY "Original Text".\n'
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Default behavior - no explicit anonymize_literals setting
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        display_line = next(
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        )
+
+        # The original literal should NOT be present (anonymized by default)
+        assert "Original Text" not in display_line
+
+    def test_display_literals_protected_when_disabled(self, tmp_path):
+        """DISPLAY literals are preserved when anonymize_literals=False (--protect-literals)."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       PROCEDURE DIVISION.\n"
+            '           DISPLAY "Protected Text".\n'
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+            anonymize_literals=False,  # Simulates --protect-literals
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        display_line = next(
+            c.transformed_line for c in result.changes if "DISPLAY" in c.transformed_line
+        )
+
+        # The original literal SHOULD still be present when protected
+        assert "Protected Text" in display_line
+
+    def test_value_clause_literal_anonymized(self, tmp_path):
+        """VALUE clause literals are anonymized by default."""
+        program = tmp_path / "TEST.cob"
+        program.write_text(
+            "       IDENTIFICATION DIVISION.\n"
+            "       PROGRAM-ID. TEST.\n"
+            "       DATA DIVISION.\n"
+            "       WORKING-STORAGE SECTION.\n"
+            "       01 WS-MESSAGE PIC X(20) VALUE 'Default message'.\n"
+            "       PROCEDURE DIVISION.\n"
+            "           STOP RUN.\n"
+        )
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Default behavior - literals are anonymized
+        anon = Anonymizer(
+            source_directory=tmp_path,
+            output_directory=output_dir,
+        )
+
+        results = anon.anonymize_all()
+
+        result = results[0]
+        value_line = next(
+            c.transformed_line for c in result.changes if "VALUE" in c.transformed_line
+        )
+
+        # The original literal should not be present (anonymized by default)
+        assert "Default message" not in value_line
+        # VALUE keyword should still be there
+        assert "VALUE" in value_line

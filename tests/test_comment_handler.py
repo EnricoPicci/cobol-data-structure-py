@@ -16,6 +16,7 @@ from cobol_anonymizer.generators.comment_generator import (
     get_comment_statistics,
     is_comment_line,
     is_divider_line,
+    is_free_format_comment,
     remove_personal_names,
     remove_system_ids,
     strip_comment,
@@ -638,3 +639,186 @@ class TestAnonymizationEdgeCases:
         line = "BENIQ * SOME COMMENT TEXT"
         transformed, _ = transformer.transform_line(line)
         assert transformed.startswith("BENIQ *")
+
+
+class TestFreeFormatCommentDetection:
+    """Tests for free-format comment detection (*> style)."""
+
+    def test_free_format_star_greater(self):
+        """Detect *> style free-format comment."""
+        line = "*> This is a free-format comment"
+        assert is_comment_line(line)
+        assert is_free_format_comment(line)
+
+    def test_free_format_star_greater_with_leading_space(self):
+        """Detect *> comment with leading whitespace."""
+        line = "    *> Indented comment"
+        assert is_comment_line(line)
+        assert is_free_format_comment(line)
+
+    def test_free_format_star_only(self):
+        """Detect * style free-format comment at start of line."""
+        line = "* This is also a comment"
+        assert is_comment_line(line)
+        assert is_free_format_comment(line)
+
+    def test_fixed_format_not_free_format(self):
+        """Fixed-format comment is not a free-format comment."""
+        line = "      * Fixed format comment"
+        assert is_comment_line(line)
+        assert not is_free_format_comment(line)
+
+    def test_free_format_divider(self):
+        """Detect free-format divider line."""
+        line = "*> **********************************************************"
+        assert is_comment_line(line)
+        assert is_free_format_comment(line)
+
+    def test_code_line_not_free_format(self):
+        """Code line is not a free-format comment."""
+        line = "MOVE X TO Y."
+        assert not is_comment_line(line)
+        assert not is_free_format_comment(line)
+
+
+class TestFreeFormatCommentTransformation:
+    """Tests for free-format comment transformation."""
+
+    def test_transform_star_greater_comment(self):
+        """Transform *> style comment."""
+        transformer = CommentTransformer()
+        line = "*> This is a comment about the program"
+        transformed, result = transformer.transform_line(line)
+        # Original text should be replaced
+        assert "comment about the program" not in transformed
+        # Prefix should be preserved
+        assert transformed.startswith("*>")
+
+    def test_transform_star_greater_with_space(self):
+        """Transform *> comment preserves space after prefix."""
+        transformer = CommentTransformer()
+        line = "*> SOME TEXT HERE"
+        transformed, result = transformer.transform_line(line)
+        assert transformed.startswith("*> ")
+        assert "SOME TEXT HERE" not in transformed
+
+    def test_transform_indented_free_format(self):
+        """Transform indented free-format comment."""
+        transformer = CommentTransformer()
+        line = "    *> Indented comment text"
+        transformed, result = transformer.transform_line(line)
+        # Leading whitespace preserved
+        assert transformed.startswith("    *>")
+        # Original text replaced
+        assert "Indented comment text" not in transformed
+
+    def test_transform_free_format_divider(self):
+        """Transform free-format divider line."""
+        transformer = CommentTransformer()
+        line = "*> **********************************************************"
+        transformed, result = transformer.transform_line(line)
+        # Dividers should be preserved
+        assert result.is_divider
+        assert "****" in transformed
+
+    def test_transform_star_only_comment(self):
+        """Transform * style comment (without >)."""
+        transformer = CommentTransformer()
+        line = "* Simple comment"
+        transformed, result = transformer.transform_line(line)
+        assert transformed.startswith("*")
+        assert "Simple comment" not in transformed
+
+    def test_transform_free_format_empty(self):
+        """Transform empty free-format comment."""
+        transformer = CommentTransformer()
+        line = "*>"
+        transformed, result = transformer.transform_line(line)
+        assert transformed == "*>"
+
+    def test_free_format_content_anonymized(self):
+        """Verify free-format comment content is replaced with filler."""
+        transformer = CommentTransformer()
+        line = "*> GESTIONE POLIZZA CLIENTE"
+        transformed, result = transformer.transform_line(line)
+        # Check that transformed has filler words
+        content = transformed[3:].strip()  # Remove "*> "
+        if content:  # If not empty/divider
+            words = content.split()
+            assert all(w in FILLER_WORDS for w in words)
+
+
+class TestFreeFormatRealWorldComments:
+    """Tests using realistic free-format COBOL comments."""
+
+    def test_free_format_header_block(self):
+        """Process typical free-format header comment block."""
+        transformer = CommentTransformer()
+        lines = [
+            "*> **********************************************************",
+            "*> * COBCALC                                                *",
+            "*> *                                                        *",
+            "*> * A simple program that allows financial functions to    *",
+            "*> * be performed using intrinsic functions.                *",
+            "*> *                                                        *",
+            "*> **********************************************************",
+        ]
+
+        results = []
+        for line in lines:
+            transformed, result = transformer.transform_line(line)
+            results.append(transformed)
+
+        # Dividers preserved
+        assert "****" in results[0]
+        assert "****" in results[6]
+        # Original text replaced
+        assert "COBCALC" not in results[1]
+        assert "financial functions" not in results[3]
+        assert "intrinsic functions" not in results[4]
+        # Prefix preserved
+        assert all(r.startswith("*>") for r in results)
+
+    def test_free_format_inline_comment(self):
+        """Process free-format inline comment."""
+        transformer = CommentTransformer()
+        line = "*> Keep processing data until END requested"
+        transformed, result = transformer.transform_line(line)
+        assert "Keep processing" not in transformed
+        assert "END requested" not in transformed
+        assert transformed.startswith("*>")
+
+    def test_free_format_section_marker(self):
+        """Process free-format section marker comment."""
+        transformer = CommentTransformer()
+        lines = [
+            "*>",
+            "*> Accept input data from buffer",
+            "*>",
+        ]
+        results = []
+        for line in lines:
+            transformed, result = transformer.transform_line(line)
+            results.append(transformed)
+
+        # Empty *> lines preserved
+        assert results[0] == "*>"
+        assert results[2] == "*>"
+        # Content replaced
+        assert "Accept input" not in results[1]
+
+    def test_mixed_format_file(self):
+        """Process file with both fixed and free format comments."""
+        transformer = CommentTransformer()
+
+        # Free format
+        free_line = "*> This is free format"
+        free_transformed, _ = transformer.transform_line(free_line)
+        assert free_transformed.startswith("*>")
+        assert "free format" not in free_transformed
+
+        # Fixed format
+        fixed_line = "      * This is fixed format"
+        fixed_transformed, _ = transformer.transform_line(fixed_line)
+        assert fixed_transformed.startswith("      *")
+        assert "fixed format" not in fixed_transformed

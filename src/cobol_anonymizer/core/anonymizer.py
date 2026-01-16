@@ -15,9 +15,13 @@ from pathlib import Path
 from typing import Optional
 
 from cobol_anonymizer.cobol.column_handler import (
+    COBOLFormat,
     COBOLLine,
+    detect_cobol_format,
     parse_file_line,
+    parse_file_line_auto,
     parse_line,
+    parse_line_auto,
     validate_code_area,
 )
 from cobol_anonymizer.cobol.copy_resolver import CopyResolver
@@ -36,6 +40,11 @@ from cobol_anonymizer.core.tokenizer import (
     Token,
     TokenType,
     tokenize_line,
+)
+from cobol_anonymizer.core.literal_anonymizer import (
+    LiteralAnonymizer,
+    select_literal_scheme,
+    transform_literals,
 )
 from cobol_anonymizer.core.utils import is_filler
 from cobol_anonymizer.exceptions import ColumnOverflowError
@@ -133,7 +142,7 @@ class LineTransformer:
     - USAGE clauses
     - Reserved words
     - FILLER
-    - EXTERNAL items
+    - EXTERNAL items (when preserve_external=True)
     - Column alignment
     """
 
@@ -142,6 +151,9 @@ class LineTransformer:
         mapping_table: MappingTable,
         redefines_tracker: Optional[RedefinesTracker] = None,
         comment_transformer: Optional[CommentTransformer] = None,
+        preserve_external: bool = False,
+        literal_anonymizer: Optional[LiteralAnonymizer] = None,
+        anonymize_literals: bool = True,
     ):
         """
         Initialize the transformer.
@@ -150,10 +162,16 @@ class LineTransformer:
             mapping_table: The mapping table for identifier lookups
             redefines_tracker: Optional tracker for REDEFINES handling
             comment_transformer: Optional transformer for comment anonymization
+            preserve_external: If True, keep EXTERNAL item names unchanged
+            literal_anonymizer: Optional anonymizer for string literals
+            anonymize_literals: Whether to anonymize string literals (default: True)
         """
         self.mapping_table = mapping_table
         self.redefines_tracker = redefines_tracker or RedefinesTracker()
         self.comment_transformer = comment_transformer or CommentTransformer()
+        self.preserve_external = preserve_external
+        self.literal_anonymizer = literal_anonymizer
+        self.anonymize_literals = anonymize_literals
 
     def transform_line(
         self,
@@ -213,12 +231,12 @@ class LineTransformer:
                 if is_filler(token.value):
                     continue
 
-                # Skip if EXTERNAL
-                if is_external:
+                # Skip if EXTERNAL and we're preserving external items
+                if is_external and self.preserve_external:
                     continue
 
-                # Skip system identifiers
-                if self.mapping_table.is_external(token.value):
+                # Skip system identifiers that are marked as external
+                if self.preserve_external and self.mapping_table.is_external(token.value):
                     continue
 
                 # Get or create anonymized name
@@ -227,10 +245,25 @@ class LineTransformer:
                     token.value = anon_name
                     changes.append((token.original_value, anon_name))
 
+        # Transform CALL statement program names (string literals after CALL)
+        call_changes = self._transform_call_literals(tokens)
+        changes.extend(call_changes)
+
         # Reconstruct the code area from tokens
         if changes:
             new_code_area = self._reconstruct_code_area(tokens, code_area)
+        else:
+            new_code_area = code_area
 
+        # Apply literal anonymization if enabled
+        if self.anonymize_literals and self.literal_anonymizer:
+            new_code_area = transform_literals(new_code_area, self.literal_anonymizer)
+            if new_code_area != code_area or changes:
+                # Mark as changed if literals were transformed
+                if new_code_area != code_area and not changes:
+                    changes.append(("literals", "anonymized"))
+
+        if changes:
             # Validate column boundaries
             try:
                 # Create a temporary line with the new code area
@@ -283,6 +316,61 @@ class LineTransformer:
             redefined = match.group(3)
             self.redefines_tracker.add_redefines(redefining, redefined, level, line_number)
 
+    def _transform_call_literals(self, tokens: list[Token]) -> list[tuple[str, str]]:
+        """
+        Transform CALL statement program names in string literals.
+
+        COBOL CALL statements reference programs by name in string literals:
+            CALL "MYPROGRAM" USING ...
+
+        This method finds the string literal after CALL and replaces the
+        program name with its anonymized version if a mapping exists.
+
+        Args:
+            tokens: List of tokens from the line
+
+        Returns:
+            List of (original, anonymized) change tuples
+        """
+        changes = []
+        found_call = False
+
+        for token in tokens:
+            if token.type == TokenType.WHITESPACE:
+                continue
+
+            # Look for CALL keyword
+            if token.type == TokenType.RESERVED and token.value.upper() == "CALL":
+                found_call = True
+                continue
+
+            # After CALL, look for string literal containing program name
+            if found_call and token.type == TokenType.LITERAL_STRING:
+                # Extract program name from string (remove quotes)
+                original_literal = token.value
+                # Handle both single and double quotes
+                if len(original_literal) >= 2:
+                    quote_char = original_literal[0]
+                    program_name = original_literal[1:-1]  # Remove quotes
+
+                    # Look up the program name in mappings
+                    anon_name = self.mapping_table.get_anonymized_name(program_name)
+                    if anon_name and anon_name.upper() != program_name.upper():
+                        # Replace the token value with anonymized name (keep quotes)
+                        token.value = f'{quote_char}{anon_name}{quote_char}'
+                        changes.append((original_literal, token.value))
+
+                # Only process the first literal after CALL
+                found_call = False
+                continue
+
+            # If we found CALL but hit something other than whitespace or string,
+            # reset (might be CALL identifier syntax instead of CALL literal)
+            if found_call and token.type not in (TokenType.WHITESPACE, TokenType.LITERAL_STRING):
+                found_call = False
+
+        return changes
+
     def _reconstruct_code_area(
         self,
         tokens: list[Token],
@@ -319,6 +407,17 @@ class LineTransformer:
         new_code_area: str,
     ) -> str:
         """Build a complete transformed line."""
+        # Handle free-format COBOL differently
+        if original.source_format == COBOLFormat.FREE:
+            # For free format, the code_area IS the full line content
+            # Trim to original length to preserve the line structure
+            result = new_code_area.rstrip()
+            # Preserve original line length if it was longer (trailing spaces)
+            if len(result) < original.original_length:
+                result = result.ljust(original.original_length)
+            return result
+
+        # Fixed format handling
         # Ensure proper area sizing
         if len(new_code_area) < 65:
             new_code_area = new_code_area.ljust(65)
@@ -374,6 +473,9 @@ class Anonymizer:
         output_directory: Optional[Path] = None,
         preserve_comments: bool = True,
         naming_scheme: NamingScheme = NamingScheme.CORPORATE,
+        preserve_external: bool = False,
+        anonymize_literals: bool = True,
+        seed: Optional[int] = None,
     ):
         """
         Initialize the anonymizer.
@@ -383,15 +485,30 @@ class Anonymizer:
             output_directory: Directory for anonymized output
             preserve_comments: If True, keep comments (may still anonymize content)
             naming_scheme: The naming scheme for anonymized identifiers
+            preserve_external: If True, keep EXTERNAL item names unchanged
+            anonymize_literals: If True (default), anonymize string literal contents
+            seed: Optional seed for deterministic output
         """
         self.source_directory = source_directory
         self.output_directory = output_directory
         self.preserve_comments = preserve_comments
         self.naming_scheme = naming_scheme
+        self.preserve_external = preserve_external
+        self.anonymize_literals = anonymize_literals
+        self.seed = seed
 
-        self.mapping_table = MappingTable(_naming_scheme=naming_scheme)
+        self.mapping_table = MappingTable(
+            _naming_scheme=naming_scheme,
+            _preserve_external=preserve_external,
+        )
         self.copy_resolver = CopyResolver()
         self.redefines_tracker = RedefinesTracker()
+
+        # Create literal anonymizer with a different scheme than the main one
+        self.literal_anonymizer: Optional[LiteralAnonymizer] = None
+        if anonymize_literals:
+            literal_scheme = select_literal_scheme(naming_scheme, seed)
+            self.literal_anonymizer = LiteralAnonymizer(literal_scheme, seed)
 
         self._files_processed: set[str] = set()
         self._processing_order: list[str] = []
@@ -437,11 +554,14 @@ class Anonymizer:
         content = file_path.read_text(encoding="latin-1")
         lines = content.splitlines()
 
+        # Detect COBOL format (fixed vs free)
+        detected_format = detect_cobol_format(lines)
+
         classifier = IdentifierClassifier(file_path.name)
 
         for line_num, line in enumerate(lines, 1):
-            # Parse the line to check for comments
-            parsed = parse_line(line, line_num)
+            # Parse the line using detected format
+            parsed = parse_line_auto(line, line_num, detected_format=detected_format)
             is_comment = parsed.is_comment
 
             # Classify the code area
@@ -481,9 +601,17 @@ class Anonymizer:
         content = file_path.read_text(encoding="latin-1")
         lines_raw = content.splitlines(keepends=True)
 
+        # Detect COBOL format (fixed vs free)
+        # Use lines without keepends for detection
+        lines_for_detection = content.splitlines()
+        detected_format = detect_cobol_format(lines_for_detection)
+
         transformer = LineTransformer(
             self.mapping_table,
             self.redefines_tracker,
+            preserve_external=self.preserve_external,
+            literal_anonymizer=self.literal_anonymizer,
+            anonymize_literals=self.anonymize_literals,
         )
 
         results = []
@@ -491,8 +619,8 @@ class Anonymizer:
         transformed_count = 0
 
         for line_num, raw_line in enumerate(lines_raw, 1):
-            # Parse the raw line (including line ending)
-            parsed = parse_file_line(raw_line, line_num)
+            # Parse the raw line using detected format
+            parsed = parse_file_line_auto(raw_line, line_num, detected_format)
 
             # Transform
             result = transformer.transform_line(parsed, file_path.name)
@@ -538,7 +666,12 @@ class Anonymizer:
 
         # Write output if path specified
         if output_path or self.output_directory:
-            output = output_path or (self.output_directory / file_path.name)
+            if output_path:
+                output = output_path
+            else:
+                # Use anonymized filename
+                anon_filename = self._get_anonymized_filename(file_path.name)
+                output = self.output_directory / anon_filename
             self._write_output(result, output)
 
         return result
@@ -582,14 +715,22 @@ class Anonymizer:
         """Get the anonymized version of a filename."""
         # Extract name without extension
         stem = Path(original_name).stem
-        suffix = Path(original_name).suffix
+        suffix = Path(original_name).suffix.lower()
 
         # Check if we have a mapping for this name
         anon = self.mapping_table.get_anonymized_name(stem)
         if anon:
-            return anon + suffix
+            return anon + Path(original_name).suffix
 
-        return original_name
+        # No existing mapping found - create one based on file type
+        # Copybooks (.cpy) get COPYBOOK_NAME type, programs (.cob, .cbl) get PROGRAM_NAME
+        if suffix == ".cpy":
+            id_type = IdentifierType.COPYBOOK_NAME
+        else:
+            id_type = IdentifierType.PROGRAM_NAME
+
+        anon = self.mapping_table.get_or_create(stem, id_type)
+        return anon + Path(original_name).suffix
 
     def _write_output(
         self,

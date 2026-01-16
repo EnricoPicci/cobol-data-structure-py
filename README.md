@@ -37,16 +37,16 @@ make install-dev
 
 ```bash
 # Basic anonymization
-cobol-anonymize --input original/ --output anonymized/
+cobol-anonymize --input original-cobol-source/ --output anonymized/
 
 # With verbose output
-cobol-anonymize --input original/ --output anonymized/ --verbose
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --verbose
 
 # Using a specific naming scheme
-cobol-anonymize --input original/ --output anonymized/ --naming-scheme animals
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --naming-scheme animals
 
 # Dry run (preview without writing files)
-cobol-anonymize --input original/ --output anonymized/ --dry-run
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --dry-run
 ```
 
 ### Python API
@@ -58,13 +58,13 @@ from cobol_anonymizer.generators.naming_schemes import NamingScheme
 
 # Basic usage
 result = anonymize_directory(
-    input_dir=Path("original/"),
+    input_dir=Path("original-cobol-source/"),
     output_dir=Path("anonymized/"),
 )
 
 # With naming scheme
 result = anonymize_directory(
-    input_dir=Path("original/"),
+    input_dir=Path("original-cobol-source/"),
     output_dir=Path("anonymized/"),
     naming_scheme=NamingScheme.ANIMALS,
 )
@@ -91,6 +91,9 @@ print(f"Mappings saved to {result.mapping_file}")
 - Data item names (levels 01-49, 66, 77, 88)
 - File names (FD/SD declarations)
 - Index names (INDEXED BY)
+- String literals (DISPLAY, VALUE clauses, etc.) - length preserved
+- CALL statement program references
+- Output file names
 
 ## What Is Preserved
 
@@ -98,9 +101,10 @@ print(f"Mappings saved to {result.mapping_file}")
 - USAGE clauses (COMP, COMP-3, etc.)
 - EXTERNAL items (cross-program references)
 - COBOL reserved words
-- Literals and constants
+- Numeric literals
 - Column structure (sequence, indicator, areas)
 - Change tags in columns 1-6
+- String literals (when using `--protect-literals`)
 
 ## Development
 
@@ -183,6 +187,8 @@ Options:
   --copybook-path DIR      Additional copybook search path (repeatable)
   --no-comments            Don't anonymize comments
   --strip-comments         Remove comment content entirely
+  --protect-literals       Keep string literals unchanged (default: anonymize them)
+  --preserve-external      Keep EXTERNAL item names unchanged
   --dry-run                Process without writing files
   --validate-only          Only validate files, don't transform
   -v, --verbose            Enable verbose output

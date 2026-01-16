@@ -256,9 +256,20 @@ class TestMappingTable:
         name3 = table.get_or_create("Ws-Field", IdentifierType.DATA_NAME)
         assert name1 == name2 == name3
 
-    def test_external_item_preserved(self):
-        """EXTERNAL items keep original names."""
+    def test_external_item_anonymized_by_default(self):
+        """EXTERNAL items are anonymized by default."""
         table = MappingTable()
+        name = table.get_or_create(
+            "SHARED-AREA",
+            IdentifierType.EXTERNAL_NAME,
+            is_external=True,
+        )
+        # By default, EXTERNAL items should be anonymized
+        assert name != "SHARED-AREA"
+
+    def test_external_item_preserved_when_configured(self):
+        """EXTERNAL items keep original names when _preserve_external=True."""
+        table = MappingTable(_preserve_external=True)
         name = table.get_or_create(
             "SHARED-AREA",
             IdentifierType.EXTERNAL_NAME,
@@ -270,6 +281,7 @@ class TestMappingTable:
         """is_external returns correct value."""
         table = MappingTable()
         table.get_or_create("SHARED-AREA", IdentifierType.EXTERNAL_NAME, is_external=True)
+        # is_external should still return True even when item is anonymized
         assert table.is_external("SHARED-AREA")
         assert not table.is_external("WS-FIELD")
 

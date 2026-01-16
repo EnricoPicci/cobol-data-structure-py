@@ -294,7 +294,8 @@ def is_comment_line(line: str) -> bool:
     """
     Check if a line is a COBOL comment.
 
-    Column 7 must contain '*' for a comment line.
+    For fixed-format: Column 7 must contain '*' or '/'.
+    For free-format: Line starts with '*>' or '*' (after optional whitespace).
 
     Args:
         line: The source line to check
@@ -302,9 +303,38 @@ def is_comment_line(line: str) -> bool:
     Returns:
         True if this is a comment line
     """
-    if len(line) < 7:
-        return False
-    return line[6] == "*"
+    # Check for fixed-format comment (column 7 = * or /)
+    if len(line) >= 7 and line[6] in ("*", "/"):
+        return True
+
+    # Check for free-format comment (*> or * at start of line)
+    stripped = line.lstrip()
+    if stripped.startswith("*>") or (stripped.startswith("*") and len(stripped) > 1):
+        return True
+
+    return False
+
+
+def is_free_format_comment(line: str) -> bool:
+    """
+    Check if a line is a free-format COBOL comment (*> style).
+
+    Args:
+        line: The source line to check
+
+    Returns:
+        True if this is a free-format comment line
+    """
+    stripped = line.lstrip()
+    # Free-format: *> comment or * at start (but not in column 7 position)
+    if stripped.startswith("*>"):
+        return True
+    if stripped.startswith("*"):
+        # It's free-format if it's not a fixed-format comment
+        # Fixed format has exactly 6 chars before the *
+        if len(line) < 7 or line[6] != "*":
+            return True
+    return False
 
 
 def is_divider_line(comment_text: str) -> bool:
@@ -519,6 +549,8 @@ class CommentTransformer:
         """
         Transform a complete COBOL line if it's a comment.
 
+        Handles both fixed-format (column 7 = *) and free-format (*> style) comments.
+
         Args:
             line: The complete COBOL source line
 
@@ -532,7 +564,11 @@ class CommentTransformer:
                 transformed_text="",
             )
 
-        # Extract comment text (everything after column 7)
+        # Check if this is a free-format comment
+        if is_free_format_comment(line):
+            return self._transform_free_format_comment(line)
+
+        # Fixed-format: Extract comment text (everything after column 7)
         prefix = line[:7]  # Columns 1-7 (including the *)
         comment_text = line[7:] if len(line) > 7 else ""
 
@@ -545,6 +581,44 @@ class CommentTransformer:
             transformed_line = prefix
         else:
             transformed_line = prefix + result.transformed_text
+
+        return transformed_line, result
+
+    def _transform_free_format_comment(self, line: str) -> tuple[str, CommentTransformResult]:
+        """
+        Transform a free-format COBOL comment (*> style).
+
+        Args:
+            line: The complete source line with free-format comment
+
+        Returns:
+            Tuple of (transformed line, result details)
+        """
+        stripped = line.lstrip()
+        leading_spaces = line[:len(line) - len(stripped)]
+
+        # Determine the comment prefix (*> or *)
+        if stripped.startswith("*>"):
+            prefix = "*>"
+            comment_text = stripped[2:]
+        else:
+            prefix = "*"
+            comment_text = stripped[1:]
+
+        # Check for space after prefix
+        if comment_text.startswith(" "):
+            prefix += " "
+            comment_text = comment_text[1:]
+
+        # Transform the comment text
+        result = self.transform_comment(comment_text)
+
+        # Reconstruct the line
+        if result.is_stripped and not result.is_divider:
+            # Empty comment - keep just the prefix
+            transformed_line = leading_spaces + prefix.rstrip()
+        else:
+            transformed_line = leading_spaces + prefix + result.transformed_text
 
         return transformed_line, result
 

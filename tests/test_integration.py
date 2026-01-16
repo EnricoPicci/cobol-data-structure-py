@@ -301,14 +301,34 @@ class TestExternalHandling:
 
         return input_dir
 
-    def test_external_preserved(self, external_codebase, tmp_path):
-        """EXTERNAL items keep their original names."""
+    def test_external_anonymized_by_default(self, external_codebase, tmp_path):
+        """EXTERNAL items are anonymized by default."""
         output_dir = tmp_path / "output"
 
         result = anonymize_directory(
             external_codebase,
             output_dir,
             overwrite=True,
+        )
+
+        assert result.success
+
+        # Check that SHARED-AREA is anonymized (not preserved)
+        for file_result in result.file_results:
+            for change in file_result.changes:
+                if "EXTERNAL" in change.original_line:
+                    # The EXTERNAL item name should be anonymized
+                    assert "SHARED-AREA" not in change.transformed_line
+
+    def test_external_preserved_when_configured(self, external_codebase, tmp_path):
+        """EXTERNAL items keep their original names when preserve_external=True."""
+        output_dir = tmp_path / "output"
+
+        result = anonymize_directory(
+            external_codebase,
+            output_dir,
+            overwrite=True,
+            preserve_external=True,
         )
 
         assert result.success

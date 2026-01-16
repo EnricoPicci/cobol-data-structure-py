@@ -59,7 +59,7 @@ cobol-data-structure-py/
 │   ├── test_tokenizer.py
 │   └── ...
 ├── docs/
-├── original/                     # (gitignored - customer source)
+├── original-cobol-source/                     # (gitignored - customer source)
 ├── anonymized/                   # Output directory
 ├── pyproject.toml
 └── README.md
@@ -952,13 +952,13 @@ def test_external_names_in_report():
 
 **CLI Usage:**
 ```bash
-cobol-anonymize --input original/ --output anonymized/
-cobol-anonymize --input original/ --output anonymized/ --config config.json
-cobol-anonymize --input original/ --output anonymized/ --no-comments
-cobol-anonymize --input original/ --output anonymized/ --verbose
-cobol-anonymize --input original/ --output anonymized/ --validate-only
-cobol-anonymize --input original/ --output anonymized/ --dry-run
-cobol-anonymize --input original/ --output anonymized/ --preserve-external
+cobol-anonymize --input original-cobol-source/ --output anonymized/
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --config config.json
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --no-comments
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --verbose
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --validate-only
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --dry-run
+cobol-anonymize --input original-cobol-source/ --output anonymized/ --preserve-external
 ```
 
 ### 10.2 Configuration
@@ -1014,7 +1014,7 @@ class Config:
 ### 11.1 Full Pipeline Tests
 
 **Tasks:**
-1. Test anonymization of complete `original/` folder
+1. Test anonymization of complete `original-cobol-source/` folder
 2. Verify all 47 files processed successfully
 3. Verify cross-file consistency
 4. Verify deterministic output (multiple runs identical)

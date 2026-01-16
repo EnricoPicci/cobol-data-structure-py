@@ -59,7 +59,8 @@ class TestMappingTableCSVExport:
 
     def test_csv_export_with_external_names(self, tmp_path):
         """CSV export includes external names."""
-        table = MappingTable(_naming_scheme=NamingScheme.NUMERIC)
+        # With _preserve_external=True, external items keep original names
+        table = MappingTable(_naming_scheme=NamingScheme.NUMERIC, _preserve_external=True)
 
         # Add regular mapping
         table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
@@ -81,7 +82,38 @@ class TestMappingTableCSVExport:
         # Find external entry
         external_row = next(r for r in rows if r["original_name"] == "EXTERNAL-ITEM")
         assert external_row["is_external"] == "true"
-        assert external_row["anonymized_name"] == "EXTERNAL-ITEM"  # Unchanged
+        assert external_row["anonymized_name"] == "EXTERNAL-ITEM"  # Unchanged when preserving
+
+        # Find regular entry
+        regular_row = next(r for r in rows if r["original_name"] == "WS-FIELD")
+        assert regular_row["is_external"] == "false"
+
+    def test_csv_export_with_external_names_anonymized(self, tmp_path):
+        """CSV export shows external names are anonymized by default."""
+        # With _preserve_external=False (default), external items are anonymized
+        table = MappingTable(_naming_scheme=NamingScheme.NUMERIC)
+
+        # Add regular mapping
+        table.get_or_create("WS-FIELD", IdentifierType.DATA_NAME)
+
+        # Add external name (will be anonymized since _preserve_external=False)
+        table.get_or_create("EXTERNAL-ITEM", IdentifierType.DATA_NAME, is_external=True)
+
+        # Save to CSV
+        csv_path = tmp_path / "mappings.csv"
+        table.save_to_csv(csv_path)
+
+        # Read and verify
+        with open(csv_path, encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        assert len(rows) == 2
+
+        # Find external entry - still marked as external but has anonymized name
+        external_row = next(r for r in rows if r["original_name"] == "EXTERNAL-ITEM")
+        assert external_row["is_external"] == "true"
+        assert external_row["anonymized_name"] != "EXTERNAL-ITEM"  # Anonymized
 
         # Find regular entry
         regular_row = next(r for r in rows if r["original_name"] == "WS-FIELD")

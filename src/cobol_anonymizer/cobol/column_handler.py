@@ -1,12 +1,17 @@
 """
-COBOL Column Handler - Fixed-format line parsing and reconstruction.
+COBOL Column Handler - Fixed-format and free-format line parsing and reconstruction.
 
-COBOL uses a fixed-column format:
+COBOL fixed-column format:
 - Columns 1-6:  Sequence number area
 - Column 7:     Indicator area (*, /, D, -, or space)
 - Columns 8-11: Area A (for division/section headers, 01/77 levels, paragraph names)
 - Columns 12-72: Area B (code continuation)
 - Columns 73-80: Identification area (often contains change tags)
+
+COBOL free-format (COBOL 2002+):
+- No fixed column structure
+- Comments start with *>
+- Code can start at any column
 """
 
 from dataclasses import dataclass
@@ -14,6 +19,14 @@ from enum import Enum
 from typing import Optional
 
 from cobol_anonymizer.exceptions import ColumnOverflowError
+
+
+class COBOLFormat(Enum):
+    """COBOL source format types."""
+
+    FIXED = "fixed"  # Traditional 80-column fixed format
+    FREE = "free"  # Free-format (COBOL 2002+)
+    AUTO = "auto"  # Auto-detect
 
 
 class IndicatorType(Enum):
@@ -67,6 +80,7 @@ class COBOLLine:
         line_ending: Original line ending (\n, \r\n, or \r)
         has_change_tag: Whether sequence area contains a known change tag
         change_tag: The detected change tag, if any
+        source_format: The format of the source (FIXED or FREE)
     """
 
     raw: str
@@ -80,6 +94,7 @@ class COBOLLine:
     line_ending: str
     has_change_tag: bool
     change_tag: Optional[str] = None
+    source_format: COBOLFormat = COBOLFormat.FIXED
 
     @property
     def is_comment(self) -> bool:
@@ -359,3 +374,169 @@ def is_area_a_content(cobol_line: COBOLLine) -> bool:
         True if there is non-space content in Area A
     """
     return cobol_line.area_a.strip() != ""
+
+
+def detect_cobol_format(lines: list[str]) -> COBOLFormat:
+    """
+    Detect whether a file uses fixed-format or free-format COBOL.
+
+    Detection heuristics:
+    - Free-format: Uses *> comments, lines < 72 chars without sequence numbers
+    - Fixed-format: Column 7 has indicators (*, /, D, -), columns 1-6 have numbers
+
+    Args:
+        lines: List of source lines from the file
+
+    Returns:
+        COBOLFormat.FIXED or COBOLFormat.FREE
+    """
+    free_format_indicators = 0
+    fixed_format_indicators = 0
+
+    for line in lines[:50]:  # Check first 50 lines
+        if not line.strip():
+            continue
+
+        # Free-format indicator: *> comments
+        if "*>" in line:
+            free_format_indicators += 2
+
+        # Free-format indicator: Short lines with code starting at column 1
+        # that don't look like fixed-format
+        if len(line.rstrip()) < 72:
+            # Check if it looks like code starts at column 1
+            stripped = line.lstrip()
+            if stripped and not stripped[0].isdigit():
+                # Code starting with non-digit at column 1 suggests free format
+                # unless it's a proper indicator in column 7
+                if len(line) < 7 or line[6] not in ("*", "/", "D", "d", "-", " "):
+                    free_format_indicators += 1
+
+        # Fixed-format indicators
+        if len(line) >= 7:
+            # Check column 7 for valid indicator
+            indicator = line[6] if len(line) > 6 else " "
+            if indicator in ("*", "/", "D", "d", "-"):
+                # Traditional comment or continuation - likely fixed format
+                if indicator in ("*", "/") and "*>" not in line[:10]:
+                    fixed_format_indicators += 2
+
+            # Check columns 1-6 for sequence numbers
+            seq_area = line[:6] if len(line) >= 6 else line
+            if seq_area.strip().isdigit() or seq_area.strip() == "":
+                # Looks like valid sequence area
+                fixed_format_indicators += 1
+
+        # Check for lines that are exactly 80 characters
+        if len(line.rstrip()) == 80 or len(line.rstrip()) > 72:
+            fixed_format_indicators += 1
+
+    # Decision: more free-format indicators means free format
+    if free_format_indicators > fixed_format_indicators:
+        return COBOLFormat.FREE
+    else:
+        return COBOLFormat.FIXED
+
+
+def parse_line_free_format(
+    line: str, line_number: int = 1, line_ending: str = "\n"
+) -> COBOLLine:
+    """
+    Parse a COBOL source line in free format.
+
+    In free format, there's no fixed column structure. Code can start
+    at any column. Comments are indicated by *> instead of * in column 7.
+
+    Args:
+        line: The source line content (without line ending)
+        line_number: 1-based line number in source file
+        line_ending: The line ending character(s) from the file
+
+    Returns:
+        COBOLLine dataclass with parsed fields adapted for free format
+    """
+    original_length = len(line)
+
+    # Check for free-format comment (*>)
+    stripped = line.lstrip()
+    is_comment = stripped.startswith("*>") or stripped.startswith("*")
+
+    # For free format, we store the entire line as the code_area
+    # sequence and indicator are virtual (not in the actual line)
+    sequence = ""  # Empty - not present in free format
+    indicator = "*" if is_comment else " "  # Virtual indicator
+
+    # The entire line content goes into the code area (area_a + area_b)
+    # For free format, area_a and area_b together hold the full line
+    content = line
+    # Pad to at least 65 chars (the code_area size in fixed format)
+    padded_content = content.ljust(65)
+    area_a = padded_content[:4]
+    area_b = padded_content[4:65]
+
+    identification = ""  # Not present in free format
+
+    return COBOLLine(
+        raw=line,
+        line_number=line_number,
+        sequence=sequence,
+        indicator=indicator,
+        area_a=area_a,
+        area_b=area_b,
+        identification=identification,
+        original_length=original_length,
+        line_ending=line_ending,
+        has_change_tag=False,
+        change_tag=None,
+        source_format=COBOLFormat.FREE,
+    )
+
+
+def parse_line_auto(
+    line: str,
+    line_number: int = 1,
+    line_ending: str = "\n",
+    detected_format: Optional[COBOLFormat] = None,
+) -> COBOLLine:
+    """
+    Parse a COBOL source line, auto-detecting or using specified format.
+
+    Args:
+        line: The source line content (without line ending)
+        line_number: 1-based line number in source file
+        line_ending: The line ending character(s) from the file
+        detected_format: Pre-detected format, or None for auto-detect per line
+
+    Returns:
+        COBOLLine dataclass with all parsed fields
+    """
+    if detected_format == COBOLFormat.FREE:
+        return parse_line_free_format(line, line_number, line_ending)
+    elif detected_format == COBOLFormat.FIXED:
+        return parse_line(line, line_number, line_ending)
+    else:
+        # Auto-detect per line (less reliable, use detected_format when possible)
+        # Quick heuristic: if line has *> or is short without proper structure
+        if "*>" in line or (len(line.rstrip()) < 72 and len(line) > 0 and line[0].isalpha()):
+            return parse_line_free_format(line, line_number, line_ending)
+        return parse_line(line, line_number, line_ending)
+
+
+def parse_file_line_auto(
+    raw_line: str,
+    line_number: int = 1,
+    detected_format: Optional[COBOLFormat] = None,
+) -> COBOLLine:
+    """
+    Parse a raw line from a file, handling line endings, with format detection.
+
+    Args:
+        raw_line: The raw line as read from file
+        line_number: 1-based line number in source file
+        detected_format: Pre-detected format, or None for auto-detect
+
+    Returns:
+        COBOLLine dataclass with all parsed fields
+    """
+    content, ending = extract_line_ending(raw_line)
+    return parse_line_auto(content, line_number, ending, detected_format)
